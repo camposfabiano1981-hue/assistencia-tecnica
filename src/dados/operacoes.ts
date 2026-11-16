@@ -1,5 +1,4 @@
 // Operações de escrita. As regras do Firestore validam tudo no servidor.
-import { sendPasswordResetEmail } from 'firebase/auth';
 import {
   Bytes,
   Timestamp,
@@ -17,7 +16,7 @@ import {
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
-import { auth, criarContaDeAcesso, db } from '../firebase';
+import { criarContaDeAcesso, db, enviarEmailSenha } from '../firebase';
 import type {
   Chamado,
   Cliente,
@@ -189,7 +188,7 @@ export async function criarOS(e: NovaOS): Promise<number> {
     tecnicoNome: e.tecnico.nome,
     tecnicoRegistro: e.tecnico.registroProfissional ?? '',
     relato: (e.relato ?? e.chamado?.relato ?? '').slice(0, 4000),
-    agendadaPara: e.agendadaPara ? Timestamp.fromDate(e.agendadaPara) : (e.chamado?.agendadoPara ?? null),
+    agendadaPara: e.agendadaPara ? Timestamp.fromDate(e.agendadaPara) : null,
     inicioEm: null,
     fimEm: null,
     checkin: null,
@@ -210,15 +209,24 @@ export async function criarOS(e: NovaOS): Promise<number> {
   const contador = doc(db, 'contadores', 'os');
   return runTransaction(db, async (tx) => {
     const atual = await tx.get(contador);
+    // Lê o chamado dentro da transação: pega o agendamento e a situação mais recentes.
+    const chamadoRef = e.chamado ? doc(db, 'chamados', e.chamado.id) : null;
+    const chamado = chamadoRef ? ((await tx.get(chamadoRef)).data() as Chamado | undefined) : undefined;
+    if (chamado?.osId) throw new Error(`Este chamado já tem a OS nº ${chamado.osId}.`);
     const n = (atual.exists() ? (atual.data().n as number) : 0) + 1;
     tx.set(contador, { n });
-    tx.set(doc(db, 'os', String(n)), { ...dados, numero: n });
-    if (e.chamado) {
-      tx.update(doc(db, 'chamados', e.chamado.id), {
+    tx.set(doc(db, 'os', String(n)), {
+      ...dados,
+      agendadaPara: dados.agendadaPara ?? chamado?.agendadoPara ?? null,
+      numero: n,
+    });
+    if (chamadoRef && chamado) {
+      const status = chamado.status === 'aberto' ? 'agendado' : chamado.status;
+      tx.update(chamadoRef, {
         osId: String(n),
-        status: e.chamado.status === 'aberto' ? 'agendado' : e.chamado.status,
+        status,
         atualizadoEm: serverTimestamp(),
-        historico: arrayUnion(evento(e.chamado.status === 'aberto' ? 'agendado' : e.chamado.status, e.autor, `OS nº ${n} aberta`)),
+        historico: arrayUnion(evento(status, e.autor, `OS nº ${n} aberta`)),
       });
     }
     return n;
@@ -339,11 +347,11 @@ export async function criarAcesso(p: {
       criadoEm: serverTimestamp(),
     }),
   );
-  await sendPasswordResetEmail(auth, email, { url: `${location.origin}/login` });
+  await enviarEmailSenha(email);
 }
 
 export function reenviarConvite(email: string) {
-  return sendPasswordResetEmail(auth, email, { url: `${location.origin}/login` });
+  return enviarEmailSenha(email);
 }
 
 export function definirAtivo(usuario: Usuario, ativo: boolean) {

@@ -8,6 +8,7 @@ import {
   getAuth,
   inMemoryPersistence,
   initializeAuth,
+  sendPasswordResetEmail,
   signOut,
   type Auth,
 } from 'firebase/auth';
@@ -83,5 +84,22 @@ export async function criarContaDeAcesso(email: string): Promise<string> {
     return credencial.user.uid;
   } finally {
     await deleteApp(temporario);
+  }
+}
+
+/**
+ * Manda o e-mail para a pessoa criar/trocar a senha, com volta para o login do app.
+ * Em endereços de prévia (domínio não autorizado no Firebase), manda sem o link de volta.
+ */
+export async function enviarEmailSenha(email: string): Promise<void> {
+  try {
+    await sendPasswordResetEmail(auth, email, { url: `${location.origin}/login` });
+  } catch (e) {
+    const codigo = (e as { code?: string }).code ?? '';
+    if (codigo === 'auth/unauthorized-continue-uri' || codigo === 'auth/invalid-continue-uri') {
+      await sendPasswordResetEmail(auth, email);
+      return;
+    }
+    throw e;
   }
 }

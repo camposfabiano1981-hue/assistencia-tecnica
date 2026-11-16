@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
-import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth, enviarEmailSenha } from '../firebase';
 import { useSessao } from '../sessao';
 import { mensagemErro, useDocumento } from '../dados/hooks';
 import { Aviso, Botao, Campo, TelaCarregando } from '../componentes/ui';
@@ -46,7 +46,7 @@ export function Login() {
       return;
     }
     try {
-      await sendPasswordResetEmail(auth, email.trim(), { url: `${location.origin}/login` });
+      await enviarEmailSenha(email.trim());
       setInfo('Se o e-mail estiver cadastrado, você vai receber um link para criar uma nova senha.');
     } catch (err) {
       setErro(mensagemErro(err));

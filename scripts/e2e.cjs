@@ -164,7 +164,7 @@ async function assinar(pagina) {
   log('Gestor agenda e cria a OS');
   await g.goto(`${APP}/interno/chamados/1`);
   await g.getByRole('button', { name: 'Salvar agendamento' }).click();
-  await g.getByText(/Agendado para/).first().waitFor();
+  await g.getByText(/Agendado para \d/).first().waitFor();
   await g.getByRole('button', { name: 'Criar OS' }).click();
   await g.waitForURL(`${APP}/interno/os/1`);
 
@@ -221,11 +221,12 @@ async function assinar(pagina) {
   await t.evaluate(() => window.scrollTo(0, 0));
   await t.screenshot({ path: join(SAIDA, '10-os-concluida.png') });
 
-  log('Conferir no banco: as 3 medições e o checklist foram gravados');
+  log('Conferir no banco: data agendada, as 3 medições e o checklist foram gravados');
   const r = await fetch('http://127.0.0.1:8080/v1/projects/demo-assistencia/databases/(default)/documents/os/1', {
     headers: { Authorization: 'Bearer owner' },
   });
   const docOS = (await r.json()).fields;
+  if (!docOS.agendadaPara.timestampValue) throw new Error('A OS ficou sem a data agendada');
   const valor = (id) => {
     const v = docOS.medicoes.mapValue.fields[id].mapValue.fields.valor;
     return Number(v.doubleValue ?? v.integerValue);

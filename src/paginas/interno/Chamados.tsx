@@ -352,7 +352,7 @@ function OSDoChamado({ chamado, cliente }: { chamado: Chamado; cliente: Cliente 
         equipamento: equipamento.dados,
         chamado,
         tecnico,
-        agendadaPara: chamado.agendadoPara?.toDate() ?? null,
+        agendadaPara: null, // a transação usa o agendamento mais recente do chamado
         autor: perfil?.nome ?? 'Equipe',
       });
       navegar(`/interno/os/${n}`);

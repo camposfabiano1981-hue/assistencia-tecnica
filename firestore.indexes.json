@@ -1,1 +1,10 @@
-{ "indexes": [], "fieldOverrides": [] }
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "fotos", "fieldPath": "imagem", "indexes": [] },
+    { "collectionGroup": "os", "fieldPath": "assinatura", "indexes": [] },
+    { "collectionGroup": "os", "fieldPath": "checklist", "indexes": [] },
+    { "collectionGroup": "os", "fieldPath": "medicoes", "indexes": [] },
+    { "collectionGroup": "config", "fieldPath": "logo", "indexes": [] }
+  ]
+}
