@@ -1,0 +1,71 @@
+import { BrowserRouter, Route, Routes } from 'react-router';
+import { ProvedorSessao } from './sessao';
+import { ExigePapel, Inicio, LayoutInterno, LayoutPortal } from './componentes/Layouts';
+import { Login } from './paginas/Login';
+import { Instalar } from './paginas/Instalar';
+import { QrEquipamento } from './paginas/Qr';
+import { MeusChamados, ChamadoCliente } from './paginas/portal/Chamados';
+import { NovoChamadoPortal } from './paginas/portal/NovoChamado';
+import { MeusEquipamentos } from './paginas/portal/Equipamentos';
+import { ContaCliente } from './paginas/portal/Conta';
+import { Painel } from './paginas/interno/Painel';
+import { ListaChamados, ChamadoInterno, NovoChamadoInterno } from './paginas/interno/Chamados';
+import { ListaOS, NovaOS } from './paginas/interno/OS';
+import { ExecutarOS } from './paginas/interno/ExecutarOS';
+import { ListaClientes, ClienteEditar, ClienteDetalhe } from './paginas/interno/Clientes';
+import { ListaEquipamentos, EquipamentoEditar, EquipamentoDetalhe } from './paginas/interno/Equipamentos';
+import { ListaTipos, TipoEditar } from './paginas/interno/Tipos';
+import { Etiquetas } from './paginas/interno/Etiquetas';
+import { Configuracoes } from './paginas/interno/Configuracoes';
+import { Mais } from './paginas/interno/Mais';
+
+export function App() {
+  return (
+    <ProvedorSessao>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/instalar" element={<Instalar />} />
+          <Route path="/q/:id" element={<QrEquipamento />} />
+
+          <Route element={<ExigePapel papeis={['cliente']} />}>
+            <Route path="/portal" element={<LayoutPortal />}>
+              <Route index element={<MeusChamados />} />
+              <Route path="novo" element={<NovoChamadoPortal />} />
+              <Route path="chamados/:id" element={<ChamadoCliente />} />
+              <Route path="equipamentos" element={<MeusEquipamentos />} />
+              <Route path="conta" element={<ContaCliente />} />
+            </Route>
+          </Route>
+
+          <Route element={<ExigePapel papeis={['gestor', 'tecnico']} />}>
+            <Route path="/interno" element={<LayoutInterno />}>
+              <Route index element={<Painel />} />
+              <Route path="chamados" element={<ListaChamados />} />
+              <Route path="chamados/novo" element={<NovoChamadoInterno />} />
+              <Route path="chamados/:id" element={<ChamadoInterno />} />
+              <Route path="os" element={<ListaOS />} />
+              <Route path="os/nova" element={<NovaOS />} />
+              <Route path="os/:id" element={<ExecutarOS />} />
+              <Route path="clientes" element={<ListaClientes />} />
+              <Route path="clientes/novo" element={<ClienteEditar />} />
+              <Route path="clientes/:id" element={<ClienteDetalhe />} />
+              <Route path="clientes/:id/editar" element={<ClienteEditar />} />
+              <Route path="equipamentos" element={<ListaEquipamentos />} />
+              <Route path="equipamentos/novo" element={<EquipamentoEditar />} />
+              <Route path="equipamentos/:id" element={<EquipamentoDetalhe />} />
+              <Route path="equipamentos/:id/editar" element={<EquipamentoEditar />} />
+              <Route path="tipos" element={<ListaTipos />} />
+              <Route path="tipos/:id" element={<TipoEditar />} />
+              <Route path="etiquetas" element={<Etiquetas />} />
+              <Route path="config" element={<Configuracoes />} />
+              <Route path="mais" element={<Mais />} />
+            </Route>
+          </Route>
+
+          <Route path="*" element={<Inicio />} />
+        </Routes>
+      </BrowserRouter>
+    </ProvedorSessao>
+  );
+}

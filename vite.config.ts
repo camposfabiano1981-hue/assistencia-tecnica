@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'sw-extra.js'],
       manifest: {
         name: 'Assistência Técnica',
         short_name: 'Assistência',
@@ -26,9 +26,12 @@ export default defineConfig({
         ],
       },
       workbox: {
+        importScripts: ['/sw-extra.js'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/__\//],
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        // Dependências opcionais do jsPDF que o app não usa.
+        globIgnores: ['**/html2canvas-*.js', '**/purify.es-*.js', '**/index.es-*.js'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
       },
     }),
