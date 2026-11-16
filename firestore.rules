@@ -1,0 +1,189 @@
+rules_version = '2';
+
+// Regras de segurança do Firestore.
+// Sem servidor, estas regras são a única barreira: todo acesso passa por aqui.
+// Papéis (coleção usuarios): gestor, tecnico, cliente. Conta sem perfil ativo não acessa nada.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Funções de apoio ----------
+    function logado() { return request.auth != null; }
+    function temPerfil() {
+      return logado() && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+    function perfil() { return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data; }
+    function ativo() { return temPerfil() && perfil().ativo == true; }
+    function gestor() { return ativo() && perfil().papel == 'gestor'; }
+    function equipe() { return ativo() && perfil().papel in ['gestor', 'tecnico']; }
+    function cliente() { return ativo() && perfil().papel == 'cliente'; }
+    function meuCliente() { return perfil().clienteId; }
+    function dados() { return request.resource.data; }
+    function texto(v, max) { return v is string && v.size() <= max; }
+    function instalado() { return exists(/databases/$(database)/documents/config/instalacao); }
+
+    // Primeiro acesso: a pessoa cria o próprio perfil de gestor e trava a instalação no mesmo lote.
+    function instalando() {
+      return logado() && !instalado()
+        && existsAfter(/databases/$(database)/documents/config/instalacao)
+        && getAfter(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.papel == 'gestor';
+    }
+
+    // ---------- Usuários ----------
+    match /usuarios/{uid} {
+      function usuarioValido() {
+        return dados().papel in ['gestor', 'tecnico', 'cliente']
+          && dados().ativo is bool
+          && texto(dados().nome, 120)
+          && texto(dados().email, 200)
+          && (dados().papel != 'cliente'
+              || (dados().clienteId is string
+                  && exists(/databases/$(database)/documents/clientes/$(dados().clienteId))));
+      }
+      allow read: if logado() && (request.auth.uid == uid || equipe());
+      allow create: if (gestor() && usuarioValido())
+        || (request.auth.uid == uid && instalando()
+            && dados().papel == 'gestor' && dados().ativo == true && usuarioValido());
+      // O gestor não pode rebaixar nem desativar a si mesmo (evita ficar trancado para fora).
+      allow update: if gestor() && usuarioValido()
+        && (uid != request.auth.uid || (dados().papel == 'gestor' && dados().ativo == true));
+      allow delete: if false;
+    }
+
+    // ---------- Configurações ----------
+    match /config/instalacao {
+      allow read: if true;
+      allow create: if logado() && !instalado()
+        && getAfter(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.papel == 'gestor';
+      allow update, delete: if false;
+    }
+    match /config/publico {
+      // Só nome e WhatsApp da empresa: usado pela etiqueta QR antes do login.
+      allow read: if true;
+      allow write: if (gestor() || instalando()) && dados().keys().hasOnly(['nome', 'whatsapp']);
+    }
+    match /config/empresa {
+      allow read: if ativo();
+      allow write: if gestor() || instalando();
+    }
+
+    // ---------- Cadastros ----------
+    match /clientes/{id} {
+      allow read: if equipe() || (cliente() && meuCliente() == id);
+      allow create, update: if equipe() && texto(dados().nome, 200) && dados().ativo is bool;
+      allow delete: if gestor();
+    }
+
+    match /tiposEquipamento/{id} {
+      allow read: if ativo();
+      allow write: if gestor();
+    }
+
+    match /equipamentos/{id} {
+      allow read: if equipe() || (cliente() && resource.data.clienteId == meuCliente());
+      allow create, update: if equipe()
+        && dados().clienteId is string
+        && exists(/databases/$(database)/documents/clientes/$(dados().clienteId))
+        && texto(dados().tipoNome, 120);
+      allow delete: if gestor();
+    }
+
+    // ---------- Numeração sequencial ----------
+    // O contador só sobe de 1 em 1 e só junto com a criação do documento de mesmo número.
+    match /contadores/chamados {
+      allow read: if ativo();
+      allow create: if ativo() && dados().keys().hasOnly(['n']) && dados().n == 1
+        && existsAfter(/databases/$(database)/documents/chamados/1);
+      allow update: if ativo() && dados().keys().hasOnly(['n']) && dados().n == resource.data.n + 1
+        && existsAfter(/databases/$(database)/documents/chamados/$(string(dados().n)));
+    }
+    match /contadores/os {
+      allow read: if equipe();
+      allow create: if equipe() && dados().keys().hasOnly(['n']) && dados().n == 1
+        && existsAfter(/databases/$(database)/documents/os/1);
+      allow update: if equipe() && dados().keys().hasOnly(['n']) && dados().n == resource.data.n + 1
+        && existsAfter(/databases/$(database)/documents/os/$(string(dados().n)));
+    }
+
+    // ---------- Chamados ----------
+    match /chamados/{id} {
+      function contadorOk() {
+        return getAfter(/databases/$(database)/documents/contadores/chamados).data.n == int(id)
+          && dados().numero == int(id);
+      }
+      function camposValidos() {
+        return texto(dados().relato, 4000) && dados().relato.size() > 0
+          && dados().parado is bool
+          && dados().qtdFotos is int && dados().qtdFotos >= 0 && dados().qtdFotos <= 3
+          && texto(dados().equipamentoDescricao, 300)
+          && dados().historico is list;
+      }
+      function equipamentoDoCliente() {
+        return dados().equipamentoId == null
+          || get(/databases/$(database)/documents/equipamentos/$(dados().equipamentoId)).data.clienteId == meuCliente();
+      }
+      allow read: if equipe() || (cliente() && resource.data.clienteId == meuCliente());
+      allow create: if contadorOk() && camposValidos() && (
+        equipe()
+        || (cliente()
+            && dados().keys().hasOnly(['numero', 'clienteId', 'clienteNome', 'equipamentoId',
+                 'equipamentoDescricao', 'relato', 'parado', 'status', 'origem', 'abertoPor',
+                 'abertoEm', 'atualizadoEm', 'qtdFotos', 'contato', 'historico'])
+            && dados().clienteId == meuCliente()
+            && dados().clienteNome == get(/databases/$(database)/documents/clientes/$(meuCliente())).data.nome
+            && dados().status == 'aberto'
+            && dados().origem == 'portal'
+            && dados().abertoPor.uid == request.auth.uid
+            && dados().abertoEm == request.time
+            && dados().historico.size() == 1
+            && equipamentoDoCliente())
+      );
+      allow update: if equipe()
+        && dados().numero == resource.data.numero
+        && dados().clienteId == resource.data.clienteId;
+      allow delete: if false;
+
+      // Fotos enviadas no chamado: no máximo 3 (ids f1, f2, f3), até ~400 KB cada.
+      match /fotos/{fotoId} {
+        function chamado() { return get(/databases/$(database)/documents/chamados/$(id)).data; }
+        allow read: if equipe() || (cliente() && chamado().clienteId == meuCliente());
+        allow create: if fotoId in ['f1', 'f2', 'f3']
+          && (equipe() || (cliente() && chamado().clienteId == meuCliente()
+                           && chamado().abertoPor.uid == request.auth.uid))
+          && dados().imagem is bytes && dados().imagem.size() <= 400000
+          && dados().clienteId == chamado().clienteId;
+        allow delete: if equipe();
+      }
+    }
+
+    // ---------- Ordens de serviço ----------
+    match /os/{id} {
+      function contadorOk() {
+        return getAfter(/databases/$(database)/documents/contadores/os).data.n == int(id)
+          && dados().numero == int(id);
+      }
+      function podeEditar() {
+        return gestor() || (equipe() && resource.data.tecnicoId == request.auth.uid);
+      }
+      allow read: if equipe()
+        || (cliente() && resource.data.clienteId == meuCliente() && resource.data.status == 'concluida');
+      allow create: if equipe() && contadorOk() && dados().status == 'aberta'
+        && dados().clienteId is string && dados().tecnicoId is string;
+      // OS concluída (assinada) fica somente leitura para todos.
+      allow update: if podeEditar() && resource.data.status != 'concluida'
+        && dados().numero == resource.data.numero
+        && dados().clienteId == resource.data.clienteId
+        && (dados().status != 'concluida'
+            || (dados().assinatura != null && dados().assinatura.imagem is bytes && dados().liberado is bool));
+      allow delete: if false;
+
+      match /fotos/{fotoId} {
+        function os() { return get(/databases/$(database)/documents/os/$(id)).data; }
+        allow read: if equipe()
+          || (cliente() && os().clienteId == meuCliente() && os().status == 'concluida');
+        allow create: if equipe() && os().status != 'concluida'
+          && dados().imagem is bytes && dados().imagem.size() <= 400000;
+        allow delete: if equipe() && os().status != 'concluida';
+      }
+    }
+  }
+}
