@@ -67,7 +67,7 @@ async function assinar(pagina) {
   await foto(navegador, fotoOS, '#0e5a74', 'Guarnição trocada');
 
   // ---------- Gestor no computador ----------
-  const ctxGestor = await navegador.newContext({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 1 });
+  const ctxGestor = await navegador.newContext({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 2 });
   const g = await ctxGestor.newPage();
   g.on('dialog', (d) => d.accept());
   g.on('pageerror', (e) => console.log('  [erro na página do gestor]', e.message));
