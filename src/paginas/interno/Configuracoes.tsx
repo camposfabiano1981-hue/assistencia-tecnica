@@ -7,9 +7,15 @@ import { avisarNovoChamado, criarAcesso, definirAtivo, reenviarConvite } from '.
 import { prepararLogo } from '../../util/imagem';
 import { soDigitos } from '../../util/formato';
 import type { Empresa, Usuario } from '../../tipos';
-import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, Selo, useUrlImagem } from '../../componentes/ui';
+import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, Selecao, Selo, useUrlImagem } from '../../componentes/ui';
+import { CartaoPix } from '../../componentes/Valores';
+import { pixDaCobranca } from '../../dados/financeiro';
+import type { TipoChavePix } from '../../util/pix';
 
-type FormEmpresa = Required<Omit<Empresa, 'logo' | 'logoTipo'>>;
+type FormEmpresa = {
+  nome: string; documento: string; telefone: string; whatsapp: string; email: string; endereco: string; cidade: string;
+  rtNome: string; rtRegistro: string; rodapeLaudo: string; avisoUrl: string; avisoToken: string;
+};
 const VAZIO: FormEmpresa = {
   nome: '', documento: '', telefone: '', whatsapp: '', email: '', endereco: '', cidade: '',
   rtNome: '', rtRegistro: '', rodapeLaudo: '', avisoUrl: '', avisoToken: '',
@@ -30,6 +36,7 @@ export function Configuracoes() {
     <>
       <CabecalhoPagina titulo="Configurações" voltar="/interno/mais" />
       <DadosEmpresa empresa={empresa} />
+      <PixEOrcamento empresa={empresa} />
       <AvisoEmail empresa={empresa} />
       <Equipe />
     </>
@@ -236,5 +243,96 @@ function Equipe() {
         Seu registro profissional aparece no laudo: preencha em "Registro do RT" acima se você mesmo atende.
       </p>
     </Cartao>
+  );
+}
+
+const TIPOS_CHAVE: { valor: TipoChavePix; rotulo: string; exemplo: string }[] = [
+  { valor: 'cnpj', rotulo: 'CNPJ', exemplo: '12.345.678/0001-90' },
+  { valor: 'cpf', rotulo: 'CPF', exemplo: '123.456.789-09' },
+  { valor: 'telefone', rotulo: 'Celular', exemplo: '(67) 99999-1234' },
+  { valor: 'email', rotulo: 'E-mail', exemplo: 'financeiro@empresa.com' },
+  { valor: 'aleatoria', rotulo: 'Chave aleatória', exemplo: '123e4567-e89b-12d3-a456-426614174000' },
+];
+
+function PixEOrcamento({ empresa }: { empresa: Empresa }) {
+  const [f, setF] = useState({
+    pixTipo: (empresa.pixTipo ?? 'cnpj') as TipoChavePix,
+    pixChave: empresa.pixChave ?? '',
+    pixNome: empresa.pixNome ?? empresa.nome ?? '',
+    pixCidade: empresa.pixCidade ?? (empresa.cidade ?? '').split(/[-/]/)[0].trim(),
+    orcValidadeDias: String(empresa.orcValidadeDias ?? 10),
+    orcCondicoes: empresa.orcCondicoes ?? 'Pix ou transferência em até 7 dias após a conclusão do serviço.',
+    orcGarantia: empresa.orcGarantia ?? '90 dias para o serviço executado; peças conforme garantia do fabricante.',
+  });
+  const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso'; texto: string } | null>(null);
+  const [teste, setTeste] = useState(false);
+  const exemplo = TIPOS_CHAVE.find((t) => t.valor === f.pixTipo)?.exemplo;
+  const pixTeste = teste
+    ? pixDaCobranca({ ...empresa, pixTipo: f.pixTipo, pixChave: f.pixChave, pixNome: f.pixNome, pixCidade: f.pixCidade }, 1, 'TESTE')
+    : null;
+
+  async function salvar(e: FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    try {
+      await setDoc(
+        doc(db, 'config', 'empresa'),
+        {
+          pixTipo: f.pixTipo,
+          pixChave: f.pixChave.trim(),
+          pixNome: f.pixNome.trim(),
+          pixCidade: f.pixCidade.trim(),
+          orcValidadeDias: Math.max(1, Number(f.orcValidadeDias) || 10),
+          orcCondicoes: f.orcCondicoes.trim(),
+          orcGarantia: f.orcGarantia.trim(),
+        },
+        { merge: true },
+      );
+      setMsg({ tom: 'sucesso', texto: 'Pix e textos do orçamento salvos.' });
+    } catch (err) {
+      setMsg({ tom: 'erro', texto: mensagemErro(err) });
+    }
+  }
+
+  return (
+    <form onSubmit={salvar}>
+      <Cartao titulo="Pix e orçamento">
+        <p className="pequeno" style={{ marginTop: 0 }}>
+          A fatura sai com QR code e Pix copia e cola gerados no próprio app, sem custo e sem integração com banco. A baixa é feita por você,
+          conferindo o extrato.
+        </p>
+        {msg && <Aviso tom={msg.tom}>{msg.texto}</Aviso>}
+        <div className="grade grade-2">
+          <Selecao rotulo="Tipo da chave Pix" value={f.pixTipo} onChange={(e) => setF({ ...f, pixTipo: e.target.value as TipoChavePix })}>
+            {TIPOS_CHAVE.map((t) => (
+              <option key={t.valor} value={t.valor}>{t.rotulo}</option>
+            ))}
+          </Selecao>
+          <Campo rotulo="Chave Pix" value={f.pixChave} onChange={(e) => setF({ ...f, pixChave: e.target.value })} placeholder={exemplo} />
+          <Campo rotulo="Nome do recebedor" value={f.pixNome} maxLength={25} onChange={(e) => setF({ ...f, pixNome: e.target.value })} ajuda="Até 25 letras, como aparece no banco." />
+          <Campo rotulo="Cidade do recebedor" value={f.pixCidade} maxLength={15} onChange={(e) => setF({ ...f, pixCidade: e.target.value })} ajuda="Até 15 letras." />
+        </div>
+        <div className="grade grade-3">
+          <Campo rotulo="Validade do orçamento (dias)" type="number" min={1} value={f.orcValidadeDias} onChange={(e) => setF({ ...f, orcValidadeDias: e.target.value })} />
+        </div>
+        <AreaTexto rotulo="Condições de pagamento (padrão)" rows={2} value={f.orcCondicoes} onChange={(e) => setF({ ...f, orcCondicoes: e.target.value })} />
+        <AreaTexto rotulo="Garantia (padrão)" rows={2} value={f.orcGarantia} onChange={(e) => setF({ ...f, orcGarantia: e.target.value })} />
+        <div className="acoes">
+          <Botao type="submit">Salvar</Botao>
+          <Botao type="button" variante="secundario" disabled={!f.pixChave.trim()} onClick={() => setTeste(!teste)}>
+            {teste ? 'Fechar teste' : 'Testar Pix (R$ 1,00)'}
+          </Botao>
+        </div>
+        {teste &&
+          (pixTeste ? (
+            <div style={{ marginTop: 14 }}>
+              <Aviso tom="info">Leia o QR no app do seu banco e confira se aparecem o seu nome e a sua chave. Não precisa concluir o pagamento.</Aviso>
+              <CartaoPix payload={pixTeste} valor={1} titulo="Pix de teste" />
+            </div>
+          ) : (
+            <Aviso tom="erro">Confira chave, nome e cidade do recebedor.</Aviso>
+          ))}
+      </Cartao>
+    </form>
   );
 }

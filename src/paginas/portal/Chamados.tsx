@@ -9,6 +9,7 @@ import { abrirWhatsApp } from '../../util/whatsapp';
 import { GaleriaFotos } from '../../componentes/Fotos';
 import { BotaoLaudo } from '../../componentes/Laudo';
 import { Aviso, Botao, CabecalhoPagina, Carregando, Cartao, Info, LinhaLista, LinkBotao, Selo, Vazio } from '../../componentes/ui';
+import { AvisoOrcamentosPendentes } from './Financeiro';
 
 export function MeusChamados() {
   const { perfil } = useSessao();
@@ -31,6 +32,7 @@ export function MeusChamados() {
   return (
     <>
       <CabecalhoPagina titulo={`Olá, ${perfil?.nome?.split(' ')[0] ?? ''}`} subtitulo="Acompanhe os seus chamados" />
+      <AvisoOrcamentosPendentes />
       <LinkBotao para="/portal/novo" icone="mais_circulo" bloco>
         Abrir novo chamado
       </LinkBotao>

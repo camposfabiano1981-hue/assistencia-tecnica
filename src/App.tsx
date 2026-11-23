@@ -8,6 +8,8 @@ import { MeusChamados, ChamadoCliente } from './paginas/portal/Chamados';
 import { NovoChamadoPortal } from './paginas/portal/NovoChamado';
 import { MeusEquipamentos } from './paginas/portal/Equipamentos';
 import { ContaCliente } from './paginas/portal/Conta';
+import { FinanceiroCliente, OrcamentoCliente, FaturaCliente } from './paginas/portal/Financeiro';
+import { Financeiro, OrcamentoEditar, OrcamentoDetalhe, FaturaNova, FaturaDetalhe } from './paginas/interno/Financeiro';
 import { Painel } from './paginas/interno/Painel';
 import { ListaChamados, ChamadoInterno, NovoChamadoInterno } from './paginas/interno/Chamados';
 import { ListaOS, NovaOS } from './paginas/interno/OS';
@@ -35,6 +37,9 @@ export function App() {
               <Route path="chamados/:id" element={<ChamadoCliente />} />
               <Route path="equipamentos" element={<MeusEquipamentos />} />
               <Route path="conta" element={<ContaCliente />} />
+              <Route path="financeiro" element={<FinanceiroCliente />} />
+              <Route path="orcamentos/:id" element={<OrcamentoCliente />} />
+              <Route path="faturas/:id" element={<FaturaCliente />} />
             </Route>
           </Route>
 
@@ -60,6 +65,12 @@ export function App() {
               <Route path="etiquetas" element={<Etiquetas />} />
               <Route path="config" element={<Configuracoes />} />
               <Route path="mais" element={<Mais />} />
+              <Route path="financeiro" element={<Financeiro />} />
+              <Route path="orcamentos/novo" element={<OrcamentoEditar />} />
+              <Route path="orcamentos/:id" element={<OrcamentoDetalhe />} />
+              <Route path="orcamentos/:id/editar" element={<OrcamentoEditar />} />
+              <Route path="faturas/nova" element={<FaturaNova />} />
+              <Route path="faturas/:id" element={<FaturaDetalhe />} />
             </Route>
           </Route>
 

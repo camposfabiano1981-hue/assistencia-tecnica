@@ -11,7 +11,7 @@
     "emuladores": "firebase emulators:start --only auth,firestore --project demo-assistencia",
     "test:regras": "firebase emulators:exec --only firestore --project demo-assistencia \"vitest run tests/regras.test.ts\"",
     "icones": "NODE_PATH=$(npm root -g) node scripts/gerar-icones.cjs",
-    "test:unidade": "vitest run tests/pix.test.ts tests/csv.test.ts"
+    "test:unidade": "vitest run tests/pix.test.ts tests/csv.test.ts tests/datas.test.ts"
   },
   "dependencies": {
     "firebase": "^12.19.0",

@@ -299,3 +299,32 @@ img { max-width: 100%; display: block; }
   .etiqueta-chamada { font-size: 8pt; }
   @page { size: A4; margin: 10mm; }
 }
+
+/* ===== Fase 2: valores, Pix, abas internas ===== */
+.item-valor { border: 1px solid var(--borda); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; background: #fff; }
+.item-valor-topo { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.item-valor-topo .icone-botao { margin-left: auto; width: 36px; height: 36px; flex-basis: 36px; }
+.item-valor-desc { width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid #c5d0d8; border-radius: 9px; font-weight: 600; }
+div.item-valor-desc { border: 0; padding: 0; min-height: 0; }
+.item-valor-numeros { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 10px; margin-top: 8px; align-items: end; }
+.item-valor-numeros label { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; color: var(--texto-suave); font-weight: 600; }
+.item-valor-numeros input { min-height: 42px; padding: 8px 10px; border: 1px solid #c5d0d8; border-radius: 9px; text-align: right; width: 100%; font-size: 1rem; }
+.item-valor-sub { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 0.78rem; color: var(--texto-suave); font-weight: 600; }
+.item-valor-sub strong { font-size: 1rem; color: var(--texto); }
+.seletor-acao { min-height: 46px; padding: 8px 12px; border: 1px solid var(--borda); border-radius: 10px; background: #fff; color: var(--primaria); font-weight: 650; max-width: 100%; }
+.totais { margin: 14px 0 0; border-top: 1px solid var(--borda); padding-top: 10px; }
+.totais div { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
+.totais dt { color: var(--texto-suave); font-weight: 600; }
+.totais dd { margin: 0; font-variant-numeric: tabular-nums; }
+.totais .totais-final { border-top: 1px solid var(--borda); margin-top: 6px; padding-top: 10px; }
+.totais .totais-final dt, .totais .totais-final dd { font-size: 1.15rem; font-weight: 800; color: var(--texto); }
+.campo-desconto { width: 140px; min-height: 40px; padding: 6px 10px; border: 1px solid #c5d0d8; border-radius: 9px; text-align: right; }
+.pix { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+@media (min-width: 640px) { .pix { grid-template-columns: 200px 1fr; } }
+.pix-qr { display: grid; place-items: center; }
+.pix-codigo { width: 100%; font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 0.78rem; padding: 8px; border: 1px solid var(--borda); border-radius: 9px; background: var(--fundo); margin-bottom: 10px; resize: none; }
+.numero { font-variant-numeric: tabular-nums; }
+.valor-destaque { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.campo-valor { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid #c5d0d8; border-radius: 10px; text-align: right; font-size: 1rem; }
+.resumo:has(> :nth-child(3):last-child) { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 520px) { .resumo:has(> :nth-child(3):last-child) { grid-template-columns: 1fr 1fr; } .resumo-item strong.numero { font-size: 1.15rem; } }
