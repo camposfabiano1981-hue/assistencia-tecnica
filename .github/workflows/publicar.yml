@@ -37,8 +37,14 @@ jobs:
         env:
           CONTA_SERVICO: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
+          trap 'rm -f "$RUNNER_TEMP/conta.json"' EXIT
           printf '%s' "$CONTA_SERVICO" > "$RUNNER_TEMP/conta.json"
+          # Mostra qual conta e projeto vêm na chave (não é segredo) para facilitar o diagnóstico.
+          node -e '
+            const c = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            console.log("Conta de serviço:", c.client_email, "| projeto da chave:", c.project_id);
+          ' "$RUNNER_TEMP/conta.json" \
+            || { echo "::error::O secret FIREBASE_SERVICE_ACCOUNT não é o JSON de uma conta de serviço."; exit 1; }
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/conta.json"
           npx firebase deploy --only hosting,firestore:rules,firestore:indexes \
             --project "${{ vars.FIREBASE_PROJECT_ID }}" --non-interactive
-          rm -f "$RUNNER_TEMP/conta.json"
