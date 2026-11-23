@@ -8,6 +8,9 @@ import { MeusChamados, ChamadoCliente } from './paginas/portal/Chamados';
 import { NovoChamadoPortal } from './paginas/portal/NovoChamado';
 import { MeusEquipamentos } from './paginas/portal/Equipamentos';
 import { ContaCliente } from './paginas/portal/Conta';
+import { FinanceiroCliente, OrcamentoCliente, FaturaCliente } from './paginas/portal/Financeiro';
+import { Financeiro, OrcamentoEditar, OrcamentoDetalhe, FaturaNova, FaturaDetalhe } from './paginas/interno/Financeiro';
+import { Vencimentos, ListaInstrumentos, InstrumentoEditar, ListaEstoque, PecaDetalhe } from './paginas/interno/Controle';
 import { Painel } from './paginas/interno/Painel';
 import { ListaChamados, ChamadoInterno, NovoChamadoInterno } from './paginas/interno/Chamados';
 import { ListaOS, NovaOS } from './paginas/interno/OS';
@@ -18,6 +21,8 @@ import { ListaTipos, TipoEditar } from './paginas/interno/Tipos';
 import { Etiquetas } from './paginas/interno/Etiquetas';
 import { Configuracoes } from './paginas/interno/Configuracoes';
 import { Mais } from './paginas/interno/Mais';
+import { Indicadores } from './paginas/interno/Indicadores';
+import { Backup } from './paginas/interno/Backup';
 
 export function App() {
   return (
@@ -35,6 +40,9 @@ export function App() {
               <Route path="chamados/:id" element={<ChamadoCliente />} />
               <Route path="equipamentos" element={<MeusEquipamentos />} />
               <Route path="conta" element={<ContaCliente />} />
+              <Route path="financeiro" element={<FinanceiroCliente />} />
+              <Route path="orcamentos/:id" element={<OrcamentoCliente />} />
+              <Route path="faturas/:id" element={<FaturaCliente />} />
             </Route>
           </Route>
 
@@ -60,6 +68,19 @@ export function App() {
               <Route path="etiquetas" element={<Etiquetas />} />
               <Route path="config" element={<Configuracoes />} />
               <Route path="mais" element={<Mais />} />
+              <Route path="financeiro" element={<Financeiro />} />
+              <Route path="orcamentos/novo" element={<OrcamentoEditar />} />
+              <Route path="orcamentos/:id" element={<OrcamentoDetalhe />} />
+              <Route path="orcamentos/:id/editar" element={<OrcamentoEditar />} />
+              <Route path="faturas/nova" element={<FaturaNova />} />
+              <Route path="faturas/:id" element={<FaturaDetalhe />} />
+              <Route path="vencimentos" element={<Vencimentos />} />
+              <Route path="instrumentos" element={<ListaInstrumentos />} />
+              <Route path="instrumentos/:id" element={<InstrumentoEditar />} />
+              <Route path="estoque" element={<ListaEstoque />} />
+              <Route path="estoque/:id" element={<PecaDetalhe />} />
+              <Route path="indicadores" element={<Indicadores />} />
+              <Route path="backup" element={<Backup />} />
             </Route>
           </Route>
 

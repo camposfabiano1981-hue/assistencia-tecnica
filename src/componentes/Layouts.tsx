@@ -75,6 +75,7 @@ export function LayoutPortal() {
           { para: '/portal', rotulo: 'Chamados', icone: 'chamados', fim: true },
           { para: '/portal/novo', rotulo: 'Abrir chamado', icone: 'mais_circulo', destaque: true },
           { para: '/portal/equipamentos', rotulo: 'Equipamentos', icone: 'caixa' },
+          { para: '/portal/financeiro', rotulo: 'Financeiro', icone: 'moeda' },
           { para: '/portal/conta', rotulo: 'Conta', icone: 'usuario' },
         ]}
       />

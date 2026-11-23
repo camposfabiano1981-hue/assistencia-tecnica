@@ -27,6 +27,9 @@ const caminhos: Record<string, string> = {
   nuvem: 'M7 18a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.4 1.5A4 4 0 0 1 17.5 18z',
   offline: 'M3 3l18 18M8.5 8.6A4.5 4.5 0 0 0 7 18h10.5M14 6.3a6 6 0 0 1 3.8 4.2A4 4 0 0 1 20.6 16',
   impressora: 'M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M6 14h12v7H6z',
+  moeda: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M15 9.3c-.5-.9-1.6-1.4-3-1.4-1.7 0-3 .8-3 2s1.3 1.7 3 2.1 3 .9 3 2.1-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6.3v11.4',
+  calendario: 'M4 6h16v15H4zM4 10h16M8 3v4M16 3v4M8 14h3v3H8z',
+  grafico: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
 };
 
 export function Icone({ nome, tamanho = 22, className }: { nome: keyof typeof caminhos | string; tamanho?: number; className?: string }) {

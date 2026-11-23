@@ -68,7 +68,7 @@ export function NovaOS() {
   const doEquipamento = useDocumento<Equipamento>(params.get('equipamento') ? `equipamentos/${params.get('equipamento')}` : null);
   const [clienteId, setClienteId] = useState(params.get('cliente') ?? '');
   const [equipamentoId, setEquipamentoId] = useState(params.get('equipamento') ?? '');
-  const [tipo, setTipo] = useState<TipoOS>('preventiva');
+  const [tipo, setTipo] = useState<TipoOS>((params.get('tipo') as TipoOS) || 'preventiva');
   const [tecnicoId, setTecnicoId] = useState('');
   const [quando, setQuando] = useState('');
   const [relato, setRelato] = useState('');

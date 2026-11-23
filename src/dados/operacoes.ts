@@ -30,12 +30,16 @@ import type {
   Papel,
   StatusChamado,
   TipoEquipamento,
+  Exigencia,
   TipoOS,
   Usuario,
 } from '../tipos';
-import { descreverEquipamento } from '../util/formato';
+import { descreverEquipamento, numeroOS } from '../util/formato';
+import { somarMeses } from '../util/datas';
+import { exigenciasDoTipo, menorVencimento } from './vencimentos';
+import { movimentarEstoque } from './estoque';
 
-const evento = (status: StatusChamado, por: string, obs?: string) =>
+export const evento = (status: StatusChamado, por: string, obs?: string) =>
   obs ? { status, em: Timestamp.now(), por, obs } : { status, em: Timestamp.now(), por };
 
 // ---------------- Chamados ----------------
@@ -146,6 +150,7 @@ export async function criarOS(e: NovaOS): Promise<number> {
   let checklist: Record<string, ItemChecklist> = {};
   let medicoes: Record<string, Medicao> = {};
   let exigeEnsaio = false;
+  let exigencias: Exigencia[] = [];
   if (e.equipamento?.tipoId) {
     const t = await getDoc(doc(db, 'tiposEquipamento', e.equipamento.tipoId));
     if (t.exists()) {
@@ -157,8 +162,16 @@ export async function criarOS(e: NovaOS): Promise<number> {
         (tipo.medicoes ?? []).map((m, ordem) => [m.id, { ...m, ordem, min: m.min ?? null, max: m.max ?? null, valor: null }]),
       );
       exigeEnsaio = !!tipo.exigeEnsaioSeguranca;
+      exigencias = exigenciasDoTipo(tipo);
     }
   }
+  // O que este atendimento cumpre (o técnico pode ajustar na OS).
+  const cumpre =
+    e.tipo === 'preventiva'
+      ? exigencias.filter((x) => x.codigo === 'preventiva').map((x) => x.codigo)
+      : e.tipo === 'ensaio'
+        ? exigencias.filter((x) => x.codigo !== 'preventiva').map((x) => x.codigo)
+        : [];
   const eq = e.equipamento;
   const dados = {
     tipo: e.tipo,
@@ -203,6 +216,12 @@ export async function criarOS(e: NovaOS): Promise<number> {
     liberado: null,
     assinatura: null,
     qtdFotos: 0,
+    instrumentosUsados: [],
+    exigencias,
+    cumpre,
+    vencimentosEquipamento: e.equipamento?.vencimentos ?? {},
+    orcamentoId: null,
+    estoqueBaixado: false,
     criadaEm: serverTimestamp(),
     atualizadaEm: serverTimestamp(),
   };
@@ -294,6 +313,7 @@ export function concluirOS(
       imagem: Bytes.fromUint8Array(assinatura.png),
       em: agora,
     }),
+    estoqueBaixado: true,
     atualizadaEm: serverTimestamp(),
   });
   if (os.chamadoId) {
@@ -306,9 +326,36 @@ export function concluirOS(
     });
   }
   if (os.equipamentoId) {
-    lote.update(doc(db, 'equipamentos', os.equipamentoId), { ultimaVisitaEm: agora, ultimaOS: os.numero });
+    // Exigências cumpridas: grava cada uma no seu campo (não apaga as outras) e avança o próximo vencimento.
+    const campos: Record<string, unknown> = { ultimaVisitaEm: agora, ultimaOS: os.numero };
+    const mapa = { ...(os.vencimentosEquipamento ?? {}) };
+    for (const codigo of os.cumpre ?? []) {
+      const ex = os.exigencias?.find((x) => x.codigo === codigo);
+      if (!ex) continue;
+      const v = {
+        descricao: ex.descricao,
+        periodicidadeMeses: ex.periodicidadeMeses,
+        ultimo: agora,
+        proximo: Timestamp.fromDate(somarMeses(agora.toDate(), ex.periodicidadeMeses)),
+      };
+      campos[`vencimentos.${codigo}`] = v;
+      mapa[codigo] = v;
+    }
+    if (os.cumpre?.length) campos.proximoVencimento = menorVencimento(mapa);
+    lote.update(doc(db, 'equipamentos', os.equipamentoId), campos);
   }
-  return lote.commit();
+  const envio = lote.commit();
+  // Baixa no estoque das peças vinculadas (uma vez só: a OS concluída fica marcada).
+  if (!os.estoqueBaixado) {
+    for (const p of os.pecas ?? []) {
+      if (p.pecaId && p.quantidade > 0) {
+        movimentarEstoque(p.pecaId, 'saida', p.quantidade, por, { osId: os.id, obs: `OS ${numeroOS(os.numero)}` }).catch((e) =>
+          console.error('Falha na baixa de estoque', e),
+        );
+      }
+    }
+  }
+  return envio;
 }
 
 export async function carregarFotos(caminhoColecao: string): Promise<Foto[]> {

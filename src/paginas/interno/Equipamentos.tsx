@@ -18,6 +18,7 @@ import {
   tomStatusOS,
 } from '../../util/formato';
 import { QrCode, urlEquipamento } from '../../componentes/QrCode';
+import { CartaoVencimentos } from './Controle';
 import {
   AreaTexto,
   Aviso,
@@ -218,6 +219,8 @@ export function EquipamentoDetalhe() {
           </LinkBotao>
         </div>
       </Cartao>
+
+      <CartaoVencimentos equipamento={e} />
 
       <Cartao titulo="Etiqueta QR" acoes={<LinkBotao para={`/interno/etiquetas?equipamento=${id}`} variante="secundario" icone="impressora">Imprimir</LinkBotao>}>
         <div className="qr-grande">

@@ -25,6 +25,8 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: npm ci
+      - name: Testes de unidade (Pix, planilhas)
+        run: npm run test:unidade
       - name: Testar regras de segurança (emulador)
         run: npm run test:regras
       - name: Compilar

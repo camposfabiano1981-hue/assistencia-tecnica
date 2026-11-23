@@ -32,6 +32,15 @@ export interface Empresa {
   logoTipo?: string;
   avisoUrl?: string;
   avisoToken?: string;
+  // Pix (Fase 2)
+  pixChave?: string;
+  pixTipo?: 'cpf' | 'cnpj' | 'telefone' | 'email' | 'aleatoria';
+  pixNome?: string;
+  pixCidade?: string;
+  // Textos padrão do orçamento
+  orcGarantia?: string;
+  orcCondicoes?: string;
+  orcValidadeDias?: number;
 }
 
 /** config/publico — o mínimo legível sem login (página do QR). */
@@ -84,6 +93,23 @@ export interface TipoEquipamento {
   periodicidadeMeses?: number | null;
   exigeEnsaioSeguranca?: boolean;
   observacoes?: string;
+  /** Exigências periódicas além da preventiva (ensaio, qualificação, testes…). */
+  exigencias?: Exigencia[];
+}
+
+/** Exigência periódica de um tipo de equipamento. A preventiva usa o código "preventiva". */
+export interface Exigencia {
+  codigo: string;
+  descricao: string;
+  periodicidadeMeses: number;
+}
+
+/** Situação de uma exigência em um equipamento. */
+export interface Vencimento {
+  descricao: string;
+  periodicidadeMeses: number | null;
+  ultimo: Timestamp | null;
+  proximo: Timestamp | null;
 }
 
 export type Criticidade = 'alta' | 'media' | 'baixa';
@@ -107,6 +133,10 @@ export interface Equipamento {
   ultimaVisitaEm?: Timestamp | null;
   ultimaOS?: number | null;
   criadoEm?: Timestamp;
+  /** Por código de exigência (preventiva, ensaio-62353…). */
+  vencimentos?: Record<string, Vencimento>;
+  /** Menor data entre os vencimentos: permite consultar o que vence logo. */
+  proximoVencimento?: Timestamp | null;
 }
 
 export type StatusChamado =
@@ -174,6 +204,8 @@ export interface PecaUsada {
   id: string;
   descricao: string;
   quantidade: number;
+  /** Vínculo com o estoque: a conclusão da OS dá baixa. */
+  pecaId?: string | null;
 }
 
 /** Cópia dos dados no momento do atendimento: o laudo não muda se o cadastro mudar depois. */
@@ -235,6 +267,17 @@ export interface OrdemServico {
   qtdFotos: number;
   criadaEm: Timestamp;
   atualizadaEm: Timestamp;
+  // Fase 2
+  instrumentosUsados?: InstrumentoUsado[];
+  /** Exigências do tipo do equipamento (cópia no momento da OS). */
+  exigencias?: Exigencia[];
+  /** Códigos das exigências que este atendimento cumpre. */
+  cumpre?: string[];
+  /** Vencimentos do equipamento quando a OS foi criada (para recalcular sem internet). */
+  vencimentosEquipamento?: Record<string, Vencimento>;
+  orcamentoId?: string | null;
+  faturaId?: string | null;
+  estoqueBaixado?: boolean;
 }
 
 /** chamados/{n}/fotos/{id} e os/{n}/fotos/{id} */
@@ -245,4 +288,131 @@ export interface Foto {
   etapa?: 'antes' | 'depois' | 'outro';
   clienteId: string;
   criadoEm?: Timestamp;
+}
+
+// ---------------- Fase 2 ----------------
+
+export interface InstrumentoUsado {
+  id: string;
+  descricao: string;
+  numeroSerie?: string;
+  certificado?: string;
+  laboratorio?: string;
+  validade: Timestamp | null;
+}
+
+/** instrumentos/{id} — padrões de medição (analisadores, termômetros…) com certificado RBC. */
+export interface Instrumento {
+  id: string;
+  descricao: string;
+  fabricante?: string;
+  modelo?: string;
+  numeroSerie?: string;
+  certificado?: string;
+  laboratorio?: string;
+  calibradoEm?: Timestamp | null;
+  validade: Timestamp | null;
+  ativo: boolean;
+}
+
+/** pecas/{id} — estoque. */
+export interface Peca {
+  id: string;
+  codigo?: string;
+  descricao: string;
+  unidade: string;
+  quantidade: number;
+  minimo: number;
+  custo: number;
+  preco: number;
+  ncm?: string;
+  ativo: boolean;
+}
+
+/** pecas/{id}/movimentos/{id} — entradas e saídas (kardex). */
+export interface MovimentoEstoque {
+  id: string;
+  tipo: 'entrada' | 'saida' | 'ajuste';
+  quantidade: number;
+  osId?: string | null;
+  obs?: string;
+  em: Timestamp;
+  por: string;
+}
+
+export interface ItemValor {
+  id: string;
+  tipo: 'servico' | 'peca';
+  descricao: string;
+  quantidade: number;
+  valorUnitario: number;
+  pecaId?: string | null;
+  codigo?: string;
+}
+
+export type StatusOrcamento = 'rascunho' | 'enviado' | 'aprovado' | 'recusado' | 'cancelado';
+
+export interface RespostaCliente {
+  status: 'aprovado' | 'recusado';
+  nome: string;
+  uid: string;
+  em: Timestamp;
+  motivo?: string;
+}
+
+/** orcamentos/{numero} */
+export interface Orcamento {
+  id: string;
+  numero: number;
+  status: StatusOrcamento;
+  clienteId: string;
+  cliente: SnapshotCliente;
+  equipamentoId: string | null;
+  equipamentoDescricao: string;
+  chamadoId: string | null;
+  osId: string | null;
+  itens: ItemValor[];
+  desconto: number;
+  totalServicos: number;
+  totalPecas: number;
+  total: number;
+  validadeAte: Timestamp | null;
+  prazoExecucao: string;
+  condicoesPagamento: string;
+  garantia: string;
+  observacoes: string;
+  criadoEm: Timestamp;
+  criadoPor: string;
+  enviadoEm?: Timestamp | null;
+  resposta?: RespostaCliente | null;
+  faturaId?: string | null;
+  atualizadoEm: Timestamp;
+}
+
+export type StatusFatura = 'aberta' | 'paga' | 'cancelada';
+export type FormaPagamento = 'pix' | 'boleto' | 'transferencia' | 'dinheiro' | 'cartao' | 'outro';
+
+/** faturas/{numero} */
+export interface Fatura {
+  id: string;
+  numero: number;
+  status: StatusFatura;
+  clienteId: string;
+  cliente: SnapshotCliente;
+  descricao: string;
+  orcamentoId: string | null;
+  osIds: string[];
+  itens: ItemValor[];
+  desconto: number;
+  totalServicos: number;
+  totalPecas: number;
+  total: number;
+  emitidaEm: Timestamp;
+  vencimento: Timestamp;
+  pixTxid: string;
+  observacoes: string;
+  pagamento?: { em: Timestamp; valor: number; forma: FormaPagamento; obs?: string } | null;
+  nfse?: { numero: string; emitidaEm: Timestamp | null; chave?: string } | null;
+  nfe?: { numero: string; chave?: string } | null;
+  atualizadaEm: Timestamp;
 }
