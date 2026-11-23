@@ -126,50 +126,55 @@ export function EditorItens({
         </div>
       ))}
       {!somenteLeitura && (
-        <div className="acoes">
-          {!!servicos?.length && (
-            <select
-              aria-label="Adicionar serviço cadastrado"
-              className="seletor-acao"
-              value=""
-              onChange={(e) => {
-                doCatalogo(e.target.value);
-                e.target.value = '';
-              }}
-            >
-              <option value="">+ Serviço cadastrado…</option>
-              {servicos.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.descricao} — {fmtMoeda(s.preco)}/{s.unidade}
-                </option>
-              ))}
-            </select>
-          )}
-          <Botao type="button" variante="secundario" icone="mais_circulo" onClick={() => novo('servico')}>
-            Serviço avulso
-          </Botao>
-          <Botao type="button" variante="secundario" icone="mais_circulo" onClick={() => novo('peca')}>
-            Peça avulsa
-          </Botao>
-          {!!pecas.length && (
-            <select
-              aria-label="Adicionar peça do estoque"
-              className="seletor-acao"
-              value=""
-              onChange={(e) => {
-                doEstoque(e.target.value);
-                e.target.value = '';
-              }}
-            >
-              <option value="">+ Peça do estoque…</option>
-              {pecas.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.descricao} — {fmtMoeda(p.preco)} ({p.quantidade} {p.unidade})
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        <>
+          {/* Cada grupo na mesma ordem: primeiro o cadastrado, depois o avulso. */}
+          <div className="acoes">
+            {!!servicos?.length && (
+              <select
+                aria-label="Adicionar serviço cadastrado"
+                className="seletor-acao"
+                value=""
+                onChange={(e) => {
+                  doCatalogo(e.target.value);
+                  e.target.value = '';
+                }}
+              >
+                <option value="">+ Serviço cadastrado…</option>
+                {servicos.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.descricao} — {fmtMoeda(s.preco)}/{s.unidade}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Botao type="button" variante="secundario" icone="mais_circulo" onClick={() => novo('servico')}>
+              Serviço avulso
+            </Botao>
+          </div>
+          <div className="acoes" style={{ marginTop: 8 }}>
+            {!!pecas.length && (
+              <select
+                aria-label="Adicionar peça do estoque"
+                className="seletor-acao"
+                value=""
+                onChange={(e) => {
+                  doEstoque(e.target.value);
+                  e.target.value = '';
+                }}
+              >
+                <option value="">+ Peça do estoque…</option>
+                {pecas.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.descricao} — {fmtMoeda(p.preco)} ({p.quantidade} {p.unidade})
+                  </option>
+                ))}
+              </select>
+            )}
+            <Botao type="button" variante="secundario" icone="mais_circulo" onClick={() => novo('peca')}>
+              Peça avulsa
+            </Botao>
+          </div>
+        </>
       )}
       {!somenteLeitura && servicos && !servicos.length && (
         <p className="pequeno" style={{ marginTop: 0 }}>
