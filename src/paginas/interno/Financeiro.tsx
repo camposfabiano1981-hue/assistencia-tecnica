@@ -1,7 +1,7 @@
 // Financeiro interno: orçamentos e faturas.
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
+import { Timestamp, collection, doc, getDoc, getDocs, getDocsFromServer, limit, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useSessao } from '../../sessao';
 import { mensagemErro, useConsulta, useDocumento } from '../../dados/hooks';
@@ -131,7 +131,9 @@ function ListaOrcamentos() {
 
 function ListaFaturas() {
   const [filtro, setFiltro] = useState<(typeof FILTROS_FAT)[number]>('aberta');
-  const [mes, setMes] = useState(() => new Date().toISOString().slice(0, 7));
+  const [mes, setMes] = useState(() => paraInputData(new Date()).slice(0, 7)); // mês local (não o de UTC)
+  const [gerandoCSV, setGerandoCSV] = useState(false);
+  const [erroCSV, setErroCSV] = useState('');
   const { itens, carregando, erro } = useConsulta<Fatura>(() => query(collection(db, 'faturas'), orderBy('numero', 'desc'), limit(500)), []);
   const comSituacao = itens.map((f) => ({ f, s: situacaoFatura(f) }));
   const lista = comSituacao.filter(({ s }) => (filtro === 'todas' ? true : filtro === 'aberta' ? s === 'aberta' || s === 'vencida' : s === filtro));
@@ -143,15 +145,28 @@ function ListaFaturas() {
   inicioMes.setHours(0, 0, 0, 0);
   const recebidoMes = itens.filter((f) => f.status === 'paga' && (f.pagamento?.em?.toMillis() ?? 0) >= inicioMes.getTime()).reduce((t, f) => t + (f.pagamento?.valor ?? 0), 0);
 
-  function planilha() {
+  // Busca no servidor exatamente as faturas do mês: a lista da tela pode estar incompleta
+  // (só as 500 mais recentes, ou apenas o que já está salvo no aparelho).
+  async function planilha() {
     const [a, m] = mes.split('-').map(Number);
-    const ini = new Date(a, m - 1, 1).getTime();
-    const fim = new Date(a, m, 1).getTime();
-    const doMes = itens.filter((f) => {
-      const t = f.emitidaEm?.toMillis() ?? 0;
-      return t >= ini && t < fim;
-    });
-    baixarArquivo(`faturas-${mes}.csv`, csvFaturas(doMes), 'text/csv;charset=utf-8');
+    if (!a || !m) return setErroCSV('Escolha o mês.');
+    setErroCSV('');
+    setGerandoCSV(true);
+    try {
+      const snap = await getDocsFromServer(
+        query(
+          collection(db, 'faturas'),
+          where('emitidaEm', '>=', Timestamp.fromDate(new Date(a, m - 1, 1))),
+          where('emitidaEm', '<', Timestamp.fromDate(new Date(a, m, 1))),
+        ),
+      );
+      const doMes = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Fatura);
+      baixarArquivo(`faturas-${mes}.csv`, csvFaturas(doMes), 'text/csv;charset=utf-8');
+    } catch (e) {
+      setErroCSV((e as { code?: string })?.code === 'unavailable' ? 'Sem conexão: a planilha precisa da internet para trazer todas as faturas do mês.' : mensagemErro(e));
+    } finally {
+      setGerandoCSV(false);
+    }
   }
 
   return (
@@ -206,10 +221,11 @@ function ListaFaturas() {
         </p>
         <div className="acoes" style={{ alignItems: 'flex-end' }}>
           <Campo rotulo="Mês" type="month" value={mes} onChange={(e) => setMes(e.target.value)} />
-          <Botao variante="secundario" icone="lista" onClick={planilha}>
+          <Botao variante="secundario" icone="lista" carregando={gerandoCSV} onClick={() => void planilha()}>
             Baixar planilha (CSV)
           </Botao>
         </div>
+        {erroCSV && <Aviso tom="erro">{erroCSV}</Aviso>}
       </Cartao>
     </>
   );
@@ -327,7 +343,12 @@ export function OrcamentoEditar() {
     if (!cliente) return setErro('Escolha o cliente.');
     const eq = equipamentos.itens.find((x) => x.id === f.equipamentoId);
     const descricao = eq ? descreverEquipamento(eq) : f.equipamentoOutro.trim() || 'Não informado';
-    if (!f.itens.some((i) => i.descricao.trim())) return setErro('Inclua pelo menos um item.');
+    // Linhas deixadas em branco não vão para o documento; linha com valor precisa de descrição.
+    if (f.itens.some((i) => !i.descricao.trim() && i.quantidade * i.valorUnitario > 0)) {
+      return setErro('Há item com valor e sem descrição: descreva-o ou remova-o.');
+    }
+    const itens = f.itens.filter((i) => i.descricao.trim());
+    if (!itens.length) return setErro('Inclua pelo menos um item.');
     const dados: DadosOrcamento = {
       clienteId: cliente.id,
       cliente: snapshotCliente(cliente),
@@ -335,7 +356,7 @@ export function OrcamentoEditar() {
       equipamentoDescricao: descricao,
       chamadoId: f.chamadoId,
       osId: f.osId,
-      itens: f.itens,
+      itens,
       desconto: f.desconto,
       validadeAte: deInputData(f.validade),
       prazoExecucao: f.prazoExecucao,
@@ -629,7 +650,11 @@ export function FaturaNova() {
     const venc = deInputData(f.vencimento);
     if (!cliente) return setErro('Escolha o cliente.');
     if (!venc) return setErro('Informe o vencimento.');
-    if (calcularTotais(f.itens, f.desconto).total <= 0) return setErro('O total precisa ser maior que zero.');
+    if (f.itens.some((i) => !i.descricao.trim() && i.quantidade * i.valorUnitario > 0)) {
+      return setErro('Há item com valor e sem descrição: descreva-o ou remova-o.');
+    }
+    const itens = f.itens.filter((i) => i.descricao.trim());
+    if (calcularTotais(itens, f.desconto).total <= 0) return setErro('O total precisa ser maior que zero.');
     if (!navigator.onLine) return setErro('Emitir a fatura precisa de internet (para gerar o número).');
     setSalvando(true);
     try {
@@ -639,7 +664,7 @@ export function FaturaNova() {
         descricao: f.descricao || 'Serviços de assistência técnica',
         orcamentoId: f.orcamentoId,
         osIds: f.osIds,
-        itens: f.itens,
+        itens,
         desconto: f.desconto,
         vencimento: venc,
         observacoes: f.observacoes,

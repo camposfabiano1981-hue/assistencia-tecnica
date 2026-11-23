@@ -40,14 +40,16 @@ export interface EstadoLista<T> {
   carregando: boolean;
   erro: Error | null;
   pendente: boolean;
+  /** Resultado veio do cache do aparelho e o servidor ainda não confirmou (pode estar incompleto). */
+  doCache: boolean;
 }
 
 export function useConsulta<T>(criar: () => Query<DocumentData> | null, deps: DependencyList): EstadoLista<T> {
-  const [estado, setEstado] = useState<EstadoLista<T>>({ itens: [], carregando: true, erro: null, pendente: false });
+  const [estado, setEstado] = useState<EstadoLista<T>>({ itens: [], carregando: true, erro: null, pendente: false, doCache: false });
   useEffect(() => {
     const q = criar();
     if (!q) {
-      setEstado({ itens: [], carregando: false, erro: null, pendente: false });
+      setEstado({ itens: [], carregando: false, erro: null, pendente: false, doCache: false });
       return;
     }
     setEstado((e) => ({ ...e, carregando: true, erro: null }));
@@ -60,8 +62,9 @@ export function useConsulta<T>(criar: () => Query<DocumentData> | null, deps: De
           carregando: false,
           erro: null,
           pendente: snap.metadata.hasPendingWrites,
+          doCache: snap.metadata.fromCache,
         }),
-      (erro) => setEstado({ itens: [], carregando: false, erro, pendente: false }),
+      (erro) => setEstado({ itens: [], carregando: false, erro, pendente: false, doCache: false }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);

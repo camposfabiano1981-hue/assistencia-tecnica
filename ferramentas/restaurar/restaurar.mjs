@@ -97,6 +97,8 @@ async function main() {
     }
   }
 
+  // No emulador não há credencial: evita a busca (inútil) pelo servidor de metadados do Google Cloud.
+  if (emulador) process.env.METADATA_SERVER_DETECTION ??= 'none';
   const credencial = emulador ? undefined : op.chave ? cert(JSON.parse(readFileSync(op.chave, 'utf8'))) : applicationDefault();
   const app = initializeApp({ projectId: op.projeto, ...(credencial ? { credential: credencial } : {}) });
   const db = getFirestore(app);

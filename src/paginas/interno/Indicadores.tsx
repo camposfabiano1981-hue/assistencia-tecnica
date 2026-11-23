@@ -9,7 +9,7 @@ import type { Chamado, Equipamento, Fatura, OrdemServico } from '../../tipos';
 import { fmtMoeda } from '../../util/formato';
 import { diasAte } from '../../util/datas';
 import { GraficoColunas, type PontoColuna } from '../../componentes/GraficoColunas';
-import { Aviso, CabecalhoPagina, Carregando, Cartao } from '../../componentes/ui';
+import { Aviso, CabecalhoPagina, Carregando, Cartao, useOnline } from '../../componentes/ui';
 
 const PERIODOS = [3, 6, 12] as const;
 
@@ -61,8 +61,12 @@ export function Indicadores() {
   const pagas = useConsulta<Fatura>(() => query(collection(db, 'faturas'), where('status', '==', 'paga')), []);
   const equip = useConsulta<Equipamento>(() => query(collection(db, 'equipamentos'), where('proximoVencimento', '!=', null)), []);
 
-  const carregando = chamados.carregando || ordens.carregando || faturas.carregando || pagas.carregando || equip.carregando;
-  const erro = chamados.erro ?? ordens.erro ?? faturas.erro ?? pagas.erro ?? equip.erro;
+  const online = useOnline();
+  const consultas = [chamados, ordens, faturas, pagas, equip];
+  const carregando = consultas.some((c) => c.carregando);
+  const erro = consultas.find((c) => c.erro)?.erro ?? null;
+  // Primeiro chegam os dados guardados no aparelho; os números se completam quando o servidor responde.
+  const atualizando = !carregando && consultas.some((c) => c.doCache);
 
   // Meses do período (o atual por último).
   const mesesLista = Array.from({ length: meses }, (_, i) => {
@@ -135,14 +139,19 @@ export function Indicadores() {
   return (
     <>
       <CabecalhoPagina titulo="Indicadores" voltar="/interno/mais" />
-      <div className="filtros" role="group" aria-label="Período">
+      <div className="filtros" role="group" aria-label="Período: últimos meses">
         {PERIODOS.map((p) => (
           <button key={p} type="button" aria-pressed={meses === p} onClick={() => setMeses(p)}>
-            Últimos {p} meses
+            {p} meses
           </button>
         ))}
       </div>
       {erro && <Aviso tom="erro">{mensagemErro(erro)}</Aviso>}
+      {atualizando && (
+        <p className="pequeno" role="status">
+          {online ? 'Atualizando com o servidor…' : 'Sem internet: números com base no que está salvo neste aparelho.'}
+        </p>
+      )}
       {carregando ? (
         <Carregando />
       ) : (

@@ -1,6 +1,6 @@
 // Gráfico de colunas de uma série (SVG puro): colunas finas com ponta arredondada, grade discreta,
 // valor só na última coluna, dica ao tocar/passar o mouse e tabela para quem prefere números.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export interface PontoColuna {
   rotulo: string; // ex.: "nov/26"
@@ -46,6 +46,12 @@ export function GraficoColunas({
 }) {
   const [caixa, largura] = useLargura<HTMLDivElement>();
   const [ativo, setAtivo] = useState<number | null>(null);
+  const dicaRef = useRef<HTMLDivElement>(null);
+  const [larguraDica, setLarguraDica] = useState(160);
+  // Mede a dica antes de pintar, para mantê-la inteira dentro do gráfico (no celular, perto da borda).
+  useLayoutEffect(() => {
+    if (dicaRef.current) setLarguraDica(dicaRef.current.offsetWidth);
+  }, [ativo]);
   const altura = 200;
   const m = { esq: 52, dir: 10, topo: 24, base: 26 };
   const lp = largura - m.esq - m.dir;
@@ -69,7 +75,8 @@ export function GraficoColunas({
 
   const ultimo = dados.length - 1;
   const dica = ativo != null ? dados[ativo] : null;
-  const xDica = ativo != null ? Math.min(Math.max(m.esq + ativo * faixa + faixa / 2, 70), largura - 70) : 0;
+  const metadeDica = larguraDica / 2 + 4;
+  const xDica = ativo != null ? Math.min(Math.max(m.esq + ativo * faixa + faixa / 2, metadeDica), largura - metadeDica) : 0;
 
   return (
     <figure className="grafico">
@@ -115,9 +122,11 @@ export function GraficoColunas({
               tabIndex={0}
               role="button"
               aria-label={`${d.rotuloLongo}: ${formatar(d.valor)} ${unidade}`}
-              onPointerEnter={() => setAtivo(i)}
-              onPointerMove={() => setAtivo(i)}
-              onPointerLeave={() => setAtivo(null)}
+              // Mouse: passa por cima. Toque: o dedo não "passa por cima", então cada toque abre/fecha a dica.
+              onPointerEnter={(e) => e.pointerType !== 'touch' && setAtivo(i)}
+              onPointerMove={(e) => e.pointerType !== 'touch' && setAtivo(i)}
+              onPointerLeave={(e) => e.pointerType !== 'touch' && setAtivo(null)}
+              onPointerDown={(e) => e.pointerType === 'touch' && setAtivo((a) => (a === i ? null : i))}
               onFocus={() => setAtivo(i)}
               onBlur={() => setAtivo(null)}
               style={{ outline: 'none', cursor: 'default' }}
@@ -125,7 +134,7 @@ export function GraficoColunas({
           ))}
         </svg>
         {dica && (
-          <div className="grafico-dica" style={{ left: xDica }} role="status">
+          <div ref={dicaRef} className="grafico-dica" style={{ left: xDica }} role="status">
             <strong>{formatar(dica.valor)}</strong>
             <span>
               <i style={{ background: COR }} aria-hidden="true" /> {unidade} · {dica.rotuloLongo}

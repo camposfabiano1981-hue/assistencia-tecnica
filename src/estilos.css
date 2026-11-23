@@ -362,3 +362,6 @@ div.item-valor-desc { border: 0; padding: 0; min-height: 0; }
 .ranking li { padding: 6px 0; border-bottom: 1px solid var(--borda); }
 .ranking li:last-child { border-bottom: 0; }
 .ranking strong { float: right; font-size: 0.88rem; }
+
+/* Cartão logo depois de uma lista solta (ex.: Vencimentos) */
+.lista + .cartao { margin-top: 14px; }
