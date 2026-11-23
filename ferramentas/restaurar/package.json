@@ -1,0 +1,15 @@
+{
+  "name": "restaurar-backup",
+  "private": true,
+  "type": "module",
+  "description": "Restaura a cópia de segurança (.json) do sistema num projeto do Firebase.",
+  "scripts": {
+    "restaurar": "node restaurar.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.1"
+  }
+}

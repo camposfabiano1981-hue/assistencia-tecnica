@@ -21,6 +21,8 @@ import { ListaTipos, TipoEditar } from './paginas/interno/Tipos';
 import { Etiquetas } from './paginas/interno/Etiquetas';
 import { Configuracoes } from './paginas/interno/Configuracoes';
 import { Mais } from './paginas/interno/Mais';
+import { Indicadores } from './paginas/interno/Indicadores';
+import { Backup } from './paginas/interno/Backup';
 
 export function App() {
   return (
@@ -77,6 +79,8 @@ export function App() {
               <Route path="instrumentos/:id" element={<InstrumentoEditar />} />
               <Route path="estoque" element={<ListaEstoque />} />
               <Route path="estoque/:id" element={<PecaDetalhe />} />
+              <Route path="indicadores" element={<Indicadores />} />
+              <Route path="backup" element={<Backup />} />
             </Route>
           </Route>
 
