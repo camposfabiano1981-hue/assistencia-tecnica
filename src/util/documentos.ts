@@ -1,7 +1,7 @@
 // PDFs de orçamento e fatura (carregados só quando usados).
 import QRCode from 'qrcode';
-import type { Empresa, Fatura, ItemValor, Orcamento } from '../tipos';
-import { fmtData, fmtDataHora, fmtMoeda, fmtTelefone } from './formato';
+import type { Chamado, Cliente, Empresa, Fatura, Foto, ItemValor, Orcamento } from '../tipos';
+import { fmtData, fmtDataHora, fmtMoeda, fmtTelefone, rotuloOrigem, rotuloStatusChamado } from './formato';
 import { COR, Folha, txt } from './pdfBase';
 import { rotuloFormaPagamento } from '../dados/financeiro';
 
@@ -143,4 +143,41 @@ export async function gerarFaturaPDF(fat: Fatura, empresa: Empresa | null, pix: 
   f.pdf.setTextColor(0);
   f.rodape(undefined, `Fatura nº ${n5(fat.numero)}`);
   return f.arquivo(`Fatura-${n5(fat.numero)}.pdf`);
+}
+
+/** Comprovante do chamado: dados, relato, histórico e fotos enviadas. */
+export function gerarChamadoPDF(c: Chamado, empresa: Empresa | null, cliente: Cliente | null, fotos: Foto[]): File {
+  const f = new Folha();
+  f.cabecalho(empresa, ['CHAMADO TÉCNICO'], `Nº ${c.numero}`, rotuloStatusChamado[c.status]);
+  if (c.parado && c.status !== 'concluido' && c.status !== 'cancelado') f.alerta('Equipamento PARADO segundo o cliente.');
+  blocoCliente(f, {
+    nome: c.clienteNome,
+    documento: cliente?.documento,
+    endereco: cliente?.endereco,
+    cidade: cliente?.cidade,
+    telefone: cliente?.whatsapp || cliente?.telefone,
+  });
+  f.secao('Chamado');
+  f.pares([
+    ['Equipamento', c.equipamentoDescricao],
+    ['Aberto em', `${fmtDataHora(c.abertoEm)} por ${c.abertoPor?.nome ?? '-'}`],
+    ['Origem', rotuloOrigem[c.origem]],
+    ['Equipamento parado', c.parado ? 'Sim' : 'Não'],
+    ['Agendado para', c.agendadoPara ? fmtDataHora(c.agendadoPara) : 'A definir'],
+    ['Ordem de serviço', c.osId ? `Nº ${n5(Number(c.osId))}` : '-'],
+    ['Contato', c.contato],
+  ]);
+  f.paragrafo('Relato do cliente', c.relato);
+  const historico = [...(c.historico ?? [])].sort((a, b) => a.em.toMillis() - b.em.toMillis());
+  if (historico.length) {
+    f.secao('Histórico');
+    f.tabela({
+      head: [['Data e hora', 'Situação', 'Por', 'Observação']],
+      body: historico.map((h) => [fmtDataHora(h.em), txt(rotuloStatusChamado[h.status] ?? h.status), txt(h.por ?? ''), txt(h.obs ?? '')]),
+      columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 34 }, 2: { cellWidth: 34 } },
+    });
+  }
+  f.galeria(`Fotos enviadas (${fotos.length})`, fotos);
+  f.rodape(undefined, `Chamado nº ${c.numero}`);
+  return f.arquivo(`chamado-${c.numero}.pdf`);
 }

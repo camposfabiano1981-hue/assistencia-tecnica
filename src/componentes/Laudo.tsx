@@ -1,13 +1,10 @@
 // Botão que gera o laudo em PDF e abre o compartilhamento (WhatsApp) ou baixa o arquivo.
 import { useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
 import { useSessao } from '../sessao';
-import { carregarFotos } from '../dados/operacoes';
 import { mensagemErro } from '../dados/hooks';
 import { compartilharArquivo } from '../util/whatsapp';
-import { numeroOS } from '../util/formato';
 import type { OrdemServico } from '../tipos';
+import { documentoDoLaudo } from './Documentos';
 import { Aviso, Botao } from './ui';
 
 export function BotaoLaudo({ os, osId, rotulo = 'Laudo em PDF', bloco }: { os?: OrdemServico; osId?: string; rotulo?: string; bloco?: boolean }) {
@@ -20,17 +17,7 @@ export function BotaoLaudo({ os, osId, rotulo = 'Laudo em PDF', bloco }: { os?: 
     setErro('');
     setGerando(true);
     try {
-      let alvo = os;
-      if (!alvo && osId) {
-        const s = await getDoc(doc(db, 'os', osId));
-        if (!s.exists()) throw new Error('Laudo não encontrado.');
-        alvo = { id: s.id, ...s.data() } as OrdemServico;
-      }
-      if (!alvo) return;
-      const fotos = await carregarFotos(`os/${alvo.id}/fotos`);
-      const { gerarLaudo } = await import('../util/laudo');
-      const arquivo = await gerarLaudo(alvo, empresa, fotos);
-      const texto = `Laudo técnico - OS nº ${numeroOS(alvo.numero)} - ${alvo.equipamento.tipoNome}`;
+      const { arquivo, texto } = await documentoDoLaudo(empresa, os, osId);
       const r = await compartilharArquivo(arquivo, texto);
       if (r === 'bloqueado') setPronto({ arquivo, texto });
     } catch (e) {

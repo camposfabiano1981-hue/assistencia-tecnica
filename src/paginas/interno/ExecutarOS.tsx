@@ -4,9 +4,9 @@ import { Link, useParams } from 'react-router';
 import { useSessao } from '../../sessao';
 import { mensagemErro, useDocumento } from '../../dados/hooks';
 import { adicionarFotoOS, concluirOS, iniciarOS, removerFotoOS, salvarOS } from '../../dados/operacoes';
-import type { Cliente, Instrumento, InstrumentoUsado, OrdemServico, Peca, ResultadoItem, ServicoCatalogo, ServicoUsado } from '../../tipos';
+import type { Cliente, Fatura, Instrumento, InstrumentoUsado, Orcamento, OrdemServico, Peca, ResultadoItem, ServicoCatalogo, ServicoUsado } from '../../tipos';
 import { fmtData, fmtDataHora, numeroOS, rotuloStatusOS, rotuloTipoOS, tomStatusOS } from '../../util/formato';
-import { arrayRemove, arrayUnion, collection, orderBy, query } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, collection, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useConsulta } from '../../dados/hooks';
 import { somarMeses, diasAte } from '../../util/datas';
@@ -16,6 +16,8 @@ import { PadAssinatura, type AssinaturaRef } from '../../componentes/Assinatura'
 import { GaleriaFotos } from '../../componentes/Fotos';
 import { Icone } from '../../componentes/Icone';
 import { BotaoLaudo } from '../../componentes/Laudo';
+import { BotaoVisualizarLaudo } from '../../componentes/Documentos';
+import { rotuloStatusOrcamento } from '../../dados/financeiro';
 import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, IndicadorSincronia, Info, LinkBotao, Selo, Vazio } from '../../componentes/ui';
 
 const ROTULO: Record<ResultadoItem, string> = { ok: 'Conforme', nok: 'Não conf.', na: 'N/A' };
@@ -63,6 +65,7 @@ export function ExecutarOS() {
               <Link to={`/interno/chamados/${os.chamadoId}`}>nº {os.chamadoId}</Link>
             </Info>
           )}
+          <VinculosOS os={os} />
           {os.inicioEm && <Info rotulo="Início">{fmtDataHora(os.inicioEm)}</Info>}
         </dl>
         {os.relato && <p className="relato" style={{ marginTop: 12 }}>{os.relato}</p>}
@@ -118,7 +121,7 @@ export function ExecutarOS() {
       {editavel && <Conclusao os={os} />}
       {!concluida && (
         <div className="acoes-coluna">
-          <BotaoLaudo os={os} rotulo="Pré-visualizar laudo (rascunho)" bloco />
+          <BotaoVisualizarLaudo os={os} rotulo="Visualizar OS (rascunho)" bloco />
           <LinkBotao para={`/interno/orcamentos/novo?os=${os.id}`} variante="secundario" icone="moeda" bloco>
             Fazer orçamento desta OS
           </LinkBotao>
@@ -298,6 +301,43 @@ function Medicoes({ os, editavel }: { os: OrdemServico; editavel: boolean }) {
         );
       })}
     </Cartao>
+  );
+}
+
+/** Atalhos para o orçamento e a fatura ligados a esta OS (direto ou pelo chamado). */
+function VinculosOS({ os }: { os: OrdemServico }) {
+  const orcs = useConsulta<Orcamento>(
+    () => query(collection(db, 'orcamentos'), os.chamadoId ? where('chamadoId', '==', os.chamadoId) : where('osId', '==', os.id)),
+    [os.id, os.chamadoId],
+  );
+  const fats = useConsulta<Fatura>(() => query(collection(db, 'faturas'), where('osIds', 'array-contains', os.id)), [os.id]);
+  const orcamentos = [...orcs.itens].sort((a, b) => a.numero - b.numero);
+  const faturas = new Map<string, number>();
+  for (const f of fats.itens) faturas.set(f.id, f.numero);
+  for (const o of orcamentos) if (o.faturaId) faturas.set(o.faturaId, Number(o.faturaId));
+  return (
+    <>
+      {!!orcamentos.length && (
+        <Info rotulo="Orçamento">
+          {orcamentos.map((o, i) => (
+            <span key={o.id}>
+              {i > 0 && ', '}
+              <Link to={`/interno/orcamentos/${o.id}`}>nº {o.numero}</Link> <span className="pequeno">({rotuloStatusOrcamento[o.status].toLowerCase()})</span>
+            </span>
+          ))}
+        </Info>
+      )}
+      {!!faturas.size && (
+        <Info rotulo="Fatura">
+          {[...faturas].map(([id, numero], i) => (
+            <span key={id}>
+              {i > 0 && ', '}
+              <Link to={`/interno/faturas/${id}`}>nº {numero}</Link>
+            </span>
+          ))}
+        </Info>
+      )}
+    </>
   );
 }
 
@@ -495,6 +535,7 @@ function Concluida({ os, zap }: { os: OrdemServico; zap?: string }) {
         {os.liberado ? 'Equipamento liberado para uso.' : <strong style={{ color: 'var(--perigo)' }}>Equipamento NÃO liberado para uso.</strong>}
       </p>
       <div className="acoes-coluna">
+        <BotaoVisualizarLaudo os={os} rotulo="Visualizar laudo" bloco />
         <BotaoLaudo os={os} rotulo="Gerar laudo e enviar" bloco />
         <LinkBotao para={`/interno/faturas/nova?os=${os.id}`} variante="secundario" icone="moeda" bloco>
           Faturar esta OS

@@ -8,6 +8,7 @@ import { fmtDataHora, fmtRelativo, rotuloStatusChamado, tomStatusChamado } from 
 import { abrirWhatsApp } from '../../util/whatsapp';
 import { GaleriaFotos } from '../../componentes/Fotos';
 import { BotaoLaudo } from '../../componentes/Laudo';
+import { BotaoVisualizarChamado, BotaoVisualizarLaudo } from '../../componentes/Documentos';
 import { Aviso, Botao, CabecalhoPagina, Carregando, Cartao, Info, LinhaLista, LinkBotao, Selo, Vazio } from '../../componentes/ui';
 import { AvisoOrcamentosPendentes } from './Financeiro';
 
@@ -103,11 +104,15 @@ export function ChamadoCliente() {
           <Info rotulo="Equipamento parado">{c.parado ? 'Sim' : 'Não'}</Info>
           <Info rotulo="Aberto por">{c.abertoPor?.nome}</Info>
         </dl>
-        {c.status === 'concluido' && c.osId && (
-          <div className="acoes-coluna">
-            <BotaoLaudo osId={c.osId} rotulo="Baixar o laudo técnico (PDF)" bloco />
-          </div>
-        )}
+        <div className="acoes-coluna">
+          {c.status === 'concluido' && c.osId && (
+            <>
+              <BotaoVisualizarLaudo osId={c.osId} rotulo="Visualizar o laudo técnico" bloco />
+              <BotaoLaudo osId={c.osId} rotulo="Baixar o laudo técnico (PDF)" bloco />
+            </>
+          )}
+          <BotaoVisualizarChamado chamado={c} bloco />
+        </div>
       </Cartao>
       <Cartao titulo="O que foi relatado">
         <p className="relato">{c.relato}</p>

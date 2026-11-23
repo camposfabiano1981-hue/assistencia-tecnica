@@ -30,6 +30,8 @@ no momento do atendimento, então não muda se o cadastro for alterado depois.
 | **Estoque** | Peças com mínimo, custo e preço. A OS concluída dá baixa sozinha, e o histórico de movimentos não pode ser alterado nem apagado. |
 | **Indicadores** | Chamados, OS, tempo até o atendimento, tempo de reparo, resolução na 1ª visita, equipamentos em dia, faturado, recebido e em aberto, em 3, 6 ou 12 meses. |
 | **Backup** | Cópia completa em JSON (com assinaturas e, se quiser, fotos) e planilhas de OS, equipamentos, clientes, estoque e instrumentos. O painel lembra o gestor todo mês. |
+| **Serviços e preços** | Tabela de serviços com preço e unidade (hora, visita, km…). Orçamento, fatura e OS aceitam serviços e peças cadastrados ou avulsos, e a fatura feita a partir da OS já vem com os preços. |
+| **Visualizar documentos** | OS (laudo), chamado, orçamento e fatura abrem na tela, inclusive no celular, antes de enviar, baixar ou imprimir. |
 
 ## Publicar pela primeira vez
 
@@ -97,9 +99,11 @@ No Chrome, abra o endereço → menu ⋮ → **Instalar app** (ou "Adicionar à 
 2. **Mais → Tipos e checklists**: confira em cada tipo a periodicidade da preventiva e as exigências
    periódicas. O botão **Incluir sugestões** traz as mais comuns; ajuste ao que a vigilância sanitária
    local cobra.
-3. **Mais → Instrumentos**: cadastre os instrumentos com número do certificado e validade.
-4. **Mais → Estoque**: cadastre as peças que você costuma usar, com o saldo inicial.
-5. Para equipamentos atendidos antes do sistema, lance o próximo vencimento em **Definir data**, na
+3. **Mais → Serviços e preços**: toque em **Incluir serviços sugeridos** e defina o preço de cada um,
+   ou cadastre os seus. Serviço com valor diferente a cada vez continua podendo entrar como avulso.
+4. **Mais → Instrumentos**: cadastre os instrumentos com número do certificado e validade.
+5. **Mais → Estoque**: cadastre as peças que você costuma usar, com o saldo inicial.
+6. Para equipamentos atendidos antes do sistema, lance o próximo vencimento em **Definir data**, na
    ficha do equipamento. **Vencimentos → Verificar** mostra quem ainda está sem data.
 
 ## Notas fiscais e contador

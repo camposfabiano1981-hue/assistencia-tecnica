@@ -38,6 +38,7 @@ import { deInputData, paraInputData, somarDias } from '../../util/datas';
 import { baixarArquivo } from '../../util/csv';
 import { abrirWhatsApp } from '../../util/whatsapp';
 import { BotaoDocumento } from '../../componentes/BotaoDocumento';
+import { BotaoVisualizar } from '../../componentes/Visualizador';
 import { CampoNumero, CartaoPix, EditorItens } from '../../componentes/Valores';
 import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, Info, LinhaLista, LinkBotao, Selecao, Selo, Vazio } from '../../componentes/ui';
 
@@ -438,6 +439,7 @@ export function OrcamentoDetalhe() {
   const navegar = useNavigate();
   const { dados: o, carregando, erro } = useDocumento<Orcamento>(`orcamentos/${id}`);
   const cliente = useDocumento<Cliente>(o ? `clientes/${o.clienteId}` : null);
+  const chamado = useDocumento<Chamado>(o?.chamadoId ? `chamados/${o.chamadoId}` : null);
   const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso'; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -479,6 +481,9 @@ export function OrcamentoDetalhe() {
         <dl className="infos">
           <Info rotulo="Equipamento">{o.equipamentoId ? <Link to={`/interno/equipamentos/${o.equipamentoId}`}>{o.equipamentoDescricao}</Link> : o.equipamentoDescricao}</Info>
           <Info rotulo="Chamado">{o.chamadoId ? <Link to={`/interno/chamados/${o.chamadoId}`}>nº {o.chamadoId}</Link> : '—'}</Info>
+          <Info rotulo="OS">
+            {(o.osId ?? chamado.dados?.osId) ? <Link to={`/interno/os/${o.osId ?? chamado.dados?.osId}`}>nº {numeroOS(Number(o.osId ?? chamado.dados?.osId))}</Link> : '—'}
+          </Info>
           <Info rotulo="Criado">{`${fmtDataHora(o.criadoEm)} por ${o.criadoPor}`}</Info>
           <Info rotulo="Válido até">{fmtData(o.validadeAte)}</Info>
           <Info rotulo="Enviado">{fmtDataHora(o.enviadoEm)}</Info>
@@ -529,8 +534,16 @@ export function OrcamentoDetalhe() {
             Ir para o chamado (criar/abrir OS)
           </LinkBotao>
         )}
+        <BotaoVisualizar
+          rotulo="Visualizar orçamento"
+          bloco
+          gerar={async () => {
+            const { gerarOrcamentoPDF } = await import('../../util/documentos');
+            return { arquivo: await gerarOrcamentoPDF(o, empresa, link), texto: `Orçamento nº ${o.numero} - ${o.equipamentoDescricao}` };
+          }}
+        />
         <BotaoDocumento
-          rotulo="PDF do orçamento"
+          rotulo="Enviar orçamento (PDF)"
           texto={`Orçamento nº ${o.numero} - ${o.equipamentoDescricao}`}
           bloco
           gerar={async () => {
@@ -775,8 +788,16 @@ export function FaturaDetalhe() {
             Enviar cobrança no WhatsApp
           </Botao>
         )}
+        <BotaoVisualizar
+          rotulo="Visualizar fatura"
+          bloco
+          gerar={async () => {
+            const { gerarFaturaPDF } = await import('../../util/documentos');
+            return { arquivo: await gerarFaturaPDF(fat, empresa, pix), texto: `Fatura nº ${fat.numero} - ${fat.descricao}` };
+          }}
+        />
         <BotaoDocumento
-          rotulo="PDF da fatura"
+          rotulo="Enviar fatura (PDF)"
           texto={`Fatura nº ${fat.numero} - ${fat.descricao}`}
           bloco
           gerar={async () => {
