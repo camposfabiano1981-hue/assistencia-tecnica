@@ -185,5 +185,84 @@ service cloud.firestore {
         allow delete: if equipe() && os().status != 'concluida';
       }
     }
+
+    // ================= Fase 2 =================
+
+    // Numeração de orçamentos e faturas (mesma trava dos chamados e OS).
+    match /contadores/orcamentos {
+      allow read: if equipe();
+      allow create: if equipe() && dados().keys().hasOnly(['n']) && dados().n == 1
+        && existsAfter(/databases/$(database)/documents/orcamentos/1);
+      allow update: if equipe() && dados().keys().hasOnly(['n']) && dados().n == resource.data.n + 1
+        && existsAfter(/databases/$(database)/documents/orcamentos/$(string(dados().n)));
+    }
+    match /contadores/faturas {
+      allow read: if equipe();
+      allow create: if equipe() && dados().keys().hasOnly(['n']) && dados().n == 1
+        && existsAfter(/databases/$(database)/documents/faturas/1);
+      allow update: if equipe() && dados().keys().hasOnly(['n']) && dados().n == resource.data.n + 1
+        && existsAfter(/databases/$(database)/documents/faturas/$(string(dados().n)));
+    }
+
+    // ---------- Orçamentos ----------
+    match /orcamentos/{id} {
+      function contadorOk() {
+        return getAfter(/databases/$(database)/documents/contadores/orcamentos).data.n == int(id)
+          && dados().numero == int(id);
+      }
+      function visivelAoCliente() {
+        return resource.data.status in ['enviado', 'aprovado', 'recusado'];
+      }
+      function dentroDaValidade() {
+        return !('validadeAte' in resource.data) || resource.data.validadeAte == null
+          || request.time <= resource.data.validadeAte;
+      }
+      // O cliente só responde: aprova ou recusa um orçamento enviado, dentro da validade,
+      // sem alterar nenhum outro campo (valores, itens, condições).
+      function respostaDoCliente() {
+        return resource.data.status == 'enviado'
+          && dados().status in ['aprovado', 'recusado']
+          && dados().diff(resource.data).affectedKeys().hasOnly(['status', 'resposta', 'atualizadoEm'])
+          && dados().resposta.status == dados().status
+          && dados().resposta.uid == request.auth.uid
+          && dados().resposta.em == request.time
+          && texto(dados().resposta.nome, 120)
+          && (!('motivo' in dados().resposta) || texto(dados().resposta.motivo, 500))
+          && dentroDaValidade();
+      }
+      allow read: if equipe()
+        || (cliente() && resource.data.clienteId == meuCliente() && visivelAoCliente());
+      allow create: if equipe() && contadorOk() && dados().clienteId is string && dados().total is number;
+      allow update: if (equipe() && dados().numero == resource.data.numero && dados().clienteId == resource.data.clienteId)
+        || (cliente() && resource.data.clienteId == meuCliente() && respostaDoCliente());
+      allow delete: if false;
+    }
+
+    // ---------- Faturas ----------
+    match /faturas/{id} {
+      function contadorOk() {
+        return getAfter(/databases/$(database)/documents/contadores/faturas).data.n == int(id)
+          && dados().numero == int(id);
+      }
+      allow read: if equipe() || (cliente() && resource.data.clienteId == meuCliente());
+      allow create: if equipe() && contadorOk() && dados().clienteId is string && dados().total is number;
+      allow update: if equipe() && dados().numero == resource.data.numero && dados().clienteId == resource.data.clienteId;
+      allow delete: if false;
+    }
+
+    // ---------- Instrumentos e estoque: só a equipe ----------
+    match /instrumentos/{id} {
+      allow read, create, update: if equipe();
+      allow delete: if gestor();
+    }
+    match /pecas/{id} {
+      allow read, create, update: if equipe();
+      allow delete: if gestor();
+      // Histórico de movimentos não se altera nem se apaga.
+      match /movimentos/{movimento} {
+        allow read, create: if equipe();
+        allow update, delete: if false;
+      }
+    }
   }
 }

@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "emuladores": "firebase emulators:start --only auth,firestore --project demo-assistencia",
     "test:regras": "firebase emulators:exec --only firestore --project demo-assistencia \"vitest run tests/regras.test.ts\"",
-    "icones": "NODE_PATH=$(npm root -g) node scripts/gerar-icones.cjs"
+    "icones": "NODE_PATH=$(npm root -g) node scripts/gerar-icones.cjs",
+    "test:unidade": "vitest run tests/pix.test.ts tests/csv.test.ts"
   },
   "dependencies": {
     "firebase": "^12.19.0",

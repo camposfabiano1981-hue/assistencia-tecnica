@@ -12,6 +12,7 @@ import {
   Bytes,
   Timestamp,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -279,5 +280,116 @@ describe('ordens de serviço', () => {
     await criarOS(fs('gestor'), { tecnicoId: 'outro' });
     await assertFails(updateDoc(doc(fs('tec'), 'os/1'), { diagnostico: 'x' }));
     await assertSucceeds(updateDoc(doc(fs('gestor'), 'os/1'), { diagnostico: 'x' }));
+  });
+});
+
+// ======================= Fase 2 =======================
+
+function orcamentoBase(n: number, extra: Record<string, unknown> = {}) {
+  return {
+    numero: n,
+    status: 'enviado',
+    clienteId: 'c1',
+    cliente: { nome: 'Clínica A' },
+    equipamentoId: 'e1',
+    equipamentoDescricao: 'Autoclave',
+    chamadoId: null,
+    osId: null,
+    itens: [{ id: 'a', tipo: 'servico', descricao: 'Mão de obra', quantidade: 1, valorUnitario: 300 }],
+    desconto: 0,
+    totalServicos: 300,
+    totalPecas: 0,
+    total: 300,
+    validadeAte: Timestamp.fromMillis(Date.now() + 7 * 86400000),
+    resposta: null,
+    ...extra,
+  };
+}
+
+async function semearFase2() {
+  await semear();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'orcamentos/1'), orcamentoBase(1));
+    await setDoc(doc(db, 'orcamentos/2'), orcamentoBase(2, { status: 'rascunho' }));
+    await setDoc(doc(db, 'orcamentos/3'), orcamentoBase(3, { validadeAte: Timestamp.fromMillis(Date.now() - 86400000) }));
+    await setDoc(doc(db, 'orcamentos/4'), orcamentoBase(4, { clienteId: 'c2' }));
+    await setDoc(doc(db, 'faturas/1'), { numero: 1, status: 'aberta', clienteId: 'c1', total: 300 });
+    await setDoc(doc(db, 'pecas/p1'), { descricao: 'Guarnição', quantidade: 5, ativo: true });
+  });
+}
+
+const resposta = (status: string, uid = 'cli1') => ({
+  status,
+  resposta: { status, nome: 'Dra. Ana', uid, em: serverTimestamp() },
+  atualizadoEm: serverTimestamp(),
+});
+
+describe('orçamentos (Fase 2)', () => {
+  it('cliente vê só orçamentos enviados do próprio cadastro', async () => {
+    await semearFase2();
+    const db = fs('cli1');
+    await assertSucceeds(getDoc(doc(db, 'orcamentos/1')));
+    await assertFails(getDoc(doc(db, 'orcamentos/2')));
+    await assertFails(getDoc(doc(db, 'orcamentos/4')));
+    await assertSucceeds(
+      getDocs(query(collection(db, 'orcamentos'), where('clienteId', '==', 'c1'), where('status', 'in', ['enviado', 'aprovado', 'recusado']))),
+    );
+    await assertFails(getDocs(query(collection(db, 'orcamentos'), where('clienteId', '==', 'c1'))));
+  });
+
+  it('cliente aprova ou recusa, mas não altera valores', async () => {
+    await semearFase2();
+    const db = fs('cli1');
+    await assertFails(updateDoc(doc(db, 'orcamentos/1'), { ...resposta('aprovado'), total: 1 }));
+    await assertFails(updateDoc(doc(db, 'orcamentos/1'), resposta('aprovado', 'outra-pessoa')));
+    await assertFails(updateDoc(doc(db, 'orcamentos/1'), { status: 'aprovado' }));
+    await assertSucceeds(updateDoc(doc(db, 'orcamentos/1'), resposta('aprovado')));
+    // Depois de respondido, não muda mais pelo cliente.
+    await assertFails(updateDoc(doc(db, 'orcamentos/1'), resposta('recusado')));
+  });
+
+  it('cliente não responde rascunho, orçamento vencido ou de outro cliente', async () => {
+    await semearFase2();
+    await assertFails(updateDoc(doc(fs('cli1'), 'orcamentos/2'), resposta('aprovado')));
+    await assertFails(updateDoc(doc(fs('cli1'), 'orcamentos/3'), resposta('aprovado')));
+    await assertFails(updateDoc(doc(fs('cli1'), 'orcamentos/4'), resposta('aprovado')));
+    await assertSucceeds(updateDoc(doc(fs('cli2'), 'orcamentos/4'), resposta('recusado', 'cli2')));
+  });
+
+  it('só a equipe cria orçamento, com numeração sequencial', async () => {
+    await semear();
+    const criar = (db: Firestore) =>
+      runTransaction(db, async (tx) => {
+        const c = await tx.get(doc(db, 'contadores/orcamentos'));
+        const n = (c.exists() ? (c.data().n as number) : 0) + 1;
+        tx.set(doc(db, 'contadores/orcamentos'), { n });
+        tx.set(doc(db, 'orcamentos', String(n)), orcamentoBase(n, { status: 'rascunho' }));
+        return n;
+      });
+    await assertFails(criar(fs('cli1')));
+    expect(await criar(fs('tec'))).toBe(1);
+    expect(await criar(fs('gestor'))).toBe(2);
+  });
+});
+
+describe('faturas, instrumentos e estoque (Fase 2)', () => {
+  it('cliente só lê a própria fatura e não altera', async () => {
+    await semearFase2();
+    await assertSucceeds(getDoc(doc(fs('cli1'), 'faturas/1')));
+    await assertFails(getDoc(doc(fs('cli2'), 'faturas/1')));
+    await assertFails(updateDoc(doc(fs('cli1'), 'faturas/1'), { status: 'paga' }));
+    await assertSucceeds(updateDoc(doc(fs('tec'), 'faturas/1'), { status: 'paga' }));
+  });
+
+  it('estoque e instrumentos são só da equipe; movimentos não se alteram', async () => {
+    await semearFase2();
+    await assertFails(getDoc(doc(fs('cli1'), 'pecas/p1')));
+    await assertFails(setDoc(doc(fs('cli1'), 'instrumentos/i1'), { descricao: 'X' }));
+    await assertSucceeds(setDoc(doc(fs('tec'), 'instrumentos/i1'), { descricao: 'Analisador', ativo: true }));
+    await assertSucceeds(setDoc(doc(fs('tec'), 'pecas/p1/movimentos/m1'), { tipo: 'saida', quantidade: 1 }));
+    await assertFails(updateDoc(doc(fs('tec'), 'pecas/p1/movimentos/m1'), { quantidade: 0 }));
+    await assertFails(deleteDoc(doc(fs('tec'), 'pecas/p1')));
+    await assertSucceeds(deleteDoc(doc(fs('gestor'), 'pecas/p1')));
   });
 });

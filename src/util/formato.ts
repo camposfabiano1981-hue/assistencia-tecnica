@@ -135,3 +135,15 @@ export function descreverEquipamento(e: {
 export function normalizar(s: string | undefined | null): string {
   return (s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 }
+
+export function fmtMoeda(n: number | null | undefined): string {
+  return (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+/** "1.234,56" ou "1234,56" -> 1234.56 */
+export function lerMoeda(s: string): number {
+  const limpo = s.replace(/[^\d,.-]/g, '');
+  const normal = limpo.includes(',') ? limpo.replace(/\./g, '').replace(',', '.') : limpo;
+  const n = Number(normal);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
