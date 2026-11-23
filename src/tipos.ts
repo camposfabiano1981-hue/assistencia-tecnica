@@ -278,6 +278,8 @@ export interface OrdemServico {
   orcamentoId?: string | null;
   faturaId?: string | null;
   estoqueBaixado?: boolean;
+  /** Serviços realizados (do catálogo ou avulsos). */
+  servicos?: ServicoUsado[];
 }
 
 /** chamados/{n}/fotos/{id} e os/{n}/fotos/{id} */
@@ -347,7 +349,29 @@ export interface ItemValor {
   quantidade: number;
   valorUnitario: number;
   pecaId?: string | null;
+  /** Vínculo com o catálogo de serviços (tabela de preços). */
+  servicoId?: string | null;
   codigo?: string;
+  unidade?: string;
+}
+
+/** Catálogo de serviços (tabela de preços): coleção servicos. */
+export interface ServicoCatalogo {
+  id: string;
+  codigo?: string;
+  descricao: string;
+  unidade: string;
+  preco: number;
+  ativo: boolean;
+}
+
+/** Serviço registrado na OS: do catálogo ou avulso (sem preço: o valor entra na fatura). */
+export interface ServicoUsado {
+  id: string;
+  descricao: string;
+  quantidade: number;
+  unidade?: string;
+  servicoId?: string | null;
 }
 
 export type StatusOrcamento = 'rascunho' | 'enviado' | 'aprovado' | 'recusado' | 'cancelado';

@@ -24,7 +24,7 @@ function blocoItens(f: Folha, itens: ItemValor[], totais: { totalServicos: numbe
     body: itens.map((i) => [
       i.tipo === 'servico' ? 'Serviço' : 'Peça',
       txt(i.codigo ? `${i.descricao} (cód. ${i.codigo})` : i.descricao),
-      String(i.quantidade).replace('.', ','),
+      `${String(i.quantidade).replace('.', ',')}${i.unidade ? ` ${i.unidade}` : ''}`,
       fmtMoeda(i.valorUnitario),
       fmtMoeda(i.quantidade * i.valorUnitario),
     ]),

@@ -1,7 +1,7 @@
 // Orçamentos e faturas. Valores ficam separados em serviço × peça (NFS-e × NF-e; Anexo III × I no Simples).
 import { Timestamp, arrayUnion, doc, runTransaction, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
-import type { Empresa, Fatura, FormaPagamento, ItemValor, Orcamento, SnapshotCliente, StatusOrcamento } from '../tipos';
+import type { Empresa, Fatura, FormaPagamento, ItemValor, Orcamento, OrdemServico, SnapshotCliente, StatusOrcamento } from '../tipos';
 import type { Tom } from '../util/formato';
 import { gerarPix } from '../util/pix';
 import { fimDoDia } from '../util/datas';
@@ -29,7 +29,9 @@ function itensLimpos(itens: ItemValor[]): ItemValor[] {
         quantidade: Math.max(0, r2(i.quantidade)),
         valorUnitario: Math.max(0, r2(i.valorUnitario)),
         pecaId: i.pecaId ?? null,
+        servicoId: i.servicoId ?? null,
         codigo: i.codigo?.trim(),
+        unidade: i.unidade?.trim() || undefined,
       }) as ItemValor,
     );
 }
@@ -127,6 +129,37 @@ export function responderOrcamento(o: Orcamento, status: 'aprovado' | 'recusado'
   const resposta: Record<string, unknown> = { status, nome: pessoa.nome.slice(0, 120), uid: pessoa.uid, em: serverTimestamp() };
   if (motivo?.trim()) resposta.motivo = motivo.trim().slice(0, 500);
   return updateDoc(doc(db, 'orcamentos', o.id), { status, resposta, atualizadoEm: serverTimestamp() });
+}
+
+/**
+ * Itens da fatura a partir da OS: serviços e peças registrados nela, com os preços atuais da tabela de
+ * serviços e do estoque. Sem serviço registrado, entra uma linha de mão de obra para preencher o valor.
+ */
+export function itensDaOS(
+  os: Pick<OrdemServico, 'numero' | 'servicos' | 'pecas'>,
+  precos: { servicos: Map<string, number>; pecas: Map<string, number> },
+): ItemValor[] {
+  const servicos: ItemValor[] = (os.servicos ?? []).map((s) => ({
+    id: novoIdItem(),
+    tipo: 'servico',
+    descricao: s.descricao,
+    quantidade: s.quantidade,
+    valorUnitario: (s.servicoId && precos.servicos.get(s.servicoId)) || 0,
+    servicoId: s.servicoId ?? null,
+    ...(s.unidade ? { unidade: s.unidade } : {}),
+  }));
+  if (!servicos.length) {
+    servicos.push({ id: novoIdItem(), tipo: 'servico', descricao: `Mão de obra técnica - OS ${String(os.numero).padStart(5, '0')}`, quantidade: 1, valorUnitario: 0 });
+  }
+  const pecas: ItemValor[] = (os.pecas ?? []).map((p) => ({
+    id: novoIdItem(),
+    tipo: 'peca',
+    descricao: p.descricao,
+    quantidade: p.quantidade,
+    valorUnitario: (p.pecaId && precos.pecas.get(p.pecaId)) || 0,
+    pecaId: p.pecaId ?? null,
+  }));
+  return [...servicos, ...pecas];
 }
 
 // ---------------- Faturas ----------------

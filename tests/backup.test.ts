@@ -34,7 +34,7 @@ describe('cópia de segurança', () => {
 });
 
 describe('planilha de OS', () => {
-  it('lista exigências atendidas, instrumentos e peças', () => {
+  it('lista exigências atendidas, instrumentos, serviços e peças', () => {
     const os = {
       numero: 7,
       tipo: 'preventiva',
@@ -49,6 +49,10 @@ describe('planilha de OS', () => {
       ],
       cumpre: ['preventiva', 'qualificacao-termica'],
       instrumentosUsados: [{ id: 'i1', descricao: 'Datalogger', numeroSerie: 'DL-9', validade: null }],
+      servicos: [
+        { id: 's1', descricao: 'Hora técnica', quantidade: 1.5, unidade: 'hora', servicoId: 'h1' },
+        { id: 's2', descricao: 'Limpeza do filtro', quantidade: 1 },
+      ],
       pecas: [{ id: 'p1', descricao: 'Vedação da porta', quantidade: 1 }],
       diagnostico: '',
       servicoExecutado: 'Limpeza e troca da vedação',
@@ -61,6 +65,7 @@ describe('planilha de OS', () => {
     expect(c[13]).toBe('Sim');
     expect(c[14]).toBe('Manutenção preventiva, Qualificação térmica');
     expect(c[15]).toBe('Datalogger nº DL-9');
-    expect(c[16]).toBe('1 × Vedação da porta');
+    expect(c[16]).toBe('1,5 hora × Hora técnica, 1 × Limpeza do filtro');
+    expect(c[17]).toBe('1 × Vedação da porta');
   });
 });

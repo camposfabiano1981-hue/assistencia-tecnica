@@ -40,7 +40,7 @@ const porNome = (a: string, b: string) => a.localeCompare(b, 'pt-BR', { sensitiv
 
 export function csvOS(lista: OrdemServico[]): string {
   return gerarCSV(
-    ['OS', 'Tipo', 'Situação', 'Cliente', 'CNPJ/CPF', 'Equipamento', 'Fabricante/modelo', 'Nº de série', 'Patrimônio', 'Técnico', 'Agendada para', 'Início', 'Conclusão', 'Liberado para uso', 'Exigências atendidas', 'Instrumentos', 'Peças', 'Diagnóstico', 'Serviço executado'],
+    ['OS', 'Tipo', 'Situação', 'Cliente', 'CNPJ/CPF', 'Equipamento', 'Fabricante/modelo', 'Nº de série', 'Patrimônio', 'Técnico', 'Agendada para', 'Início', 'Conclusão', 'Liberado para uso', 'Exigências atendidas', 'Instrumentos', 'Serviços', 'Peças', 'Diagnóstico', 'Serviço executado'],
     [...lista]
       .sort((a, b) => a.numero - b.numero)
       .map((o) => [
@@ -60,6 +60,7 @@ export function csvOS(lista: OrdemServico[]): string {
         o.liberado ?? '',
         (o.cumpre ?? []).map((c) => o.exigencias?.find((e) => e.codigo === c)?.descricao ?? c).join(', '),
         (o.instrumentosUsados ?? []).map((i) => [i.descricao, i.numeroSerie && `nº ${i.numeroSerie}`].filter(Boolean).join(' ')).join(', '),
+        (o.servicos ?? []).map((x) => `${String(x.quantidade).replace('.', ',')}${x.unidade ? ` ${x.unidade}` : ''} × ${x.descricao}`).join(', '),
         (o.pecas ?? []).map((p) => `${p.quantidade} × ${p.descricao}`).join(', '),
         o.diagnostico,
         o.servicoExecutado,

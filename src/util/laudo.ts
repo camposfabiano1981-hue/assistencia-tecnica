@@ -116,6 +116,10 @@ export async function gerarLaudo(os: OrdemServico, empresa: Empresa | null, foto
   f.secao('Diagnóstico e serviço executado');
   f.paragrafo('Diagnóstico', os.diagnostico || '-');
   f.paragrafo('Serviço executado', os.servicoExecutado || '-');
+  if (os.servicos?.length) {
+    const qtd = (n: number) => String(n).replace('.', ',');
+    f.paragrafo('Serviços realizados', os.servicos.map((x) => `${qtd(x.quantidade)}${x.unidade ? ` ${x.unidade}` : ''} x ${x.descricao}`).join('\n'));
+  }
   if (os.pecas?.length) f.paragrafo('Peças substituídas', os.pecas.map((p) => `${p.quantidade} x ${p.descricao}`).join('\n'));
   f.paragrafo('Instrumentos (outros)', os.instrumentos);
   f.paragrafo('Observações', os.observacoes);

@@ -11,13 +11,14 @@
     "emuladores": "firebase emulators:start --only auth,firestore --project demo-assistencia",
     "test:regras": "firebase emulators:exec --only firestore --project demo-assistencia \"vitest run tests/regras.test.ts\"",
     "icones": "NODE_PATH=$(npm root -g) node scripts/gerar-icones.cjs",
-    "test:unidade": "vitest run tests/pix.test.ts tests/csv.test.ts tests/datas.test.ts tests/backup.test.ts",
+    "test:unidade": "vitest run tests/pix.test.ts tests/csv.test.ts tests/datas.test.ts tests/backup.test.ts tests/itens.test.ts",
     "e2e": "export NODE_PATH=$(npm root -g) && node scripts/limpar-emuladores.cjs && node scripts/e2e.cjs && node scripts/e2e-fase2.cjs"
   },
   "dependencies": {
     "firebase": "^12.19.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.9",
+    "pdfjs-dist": "^6.5.438",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

@@ -12,6 +12,7 @@ export function Mais() {
         <LinhaLista para="/interno/vencimentos" titulo={<><Icone nome="calendario" tamanho={18} /> Vencimentos</>} detalhe="Preventivas, ensaios e exigências dos próximos 60 dias" />
         <LinhaLista para="/interno/indicadores" titulo={<><Icone nome="grafico" tamanho={18} /> Indicadores</>} detalhe="Atendimentos, tempos e faturamento do período" />
         <LinhaLista para="/interno/equipamentos" titulo={<><Icone nome="caixa" tamanho={18} /> Equipamentos</>} detalhe="Todos os equipamentos atendidos" />
+        <LinhaLista para="/interno/servicos" titulo={<><Icone nome="chave" tamanho={18} /> Serviços e preços</>} detalhe="Tabela de serviços para orçamento, fatura e OS" />
         <LinhaLista para="/interno/estoque" titulo={<><Icone nome="caixa" tamanho={18} /> Estoque</>} detalhe="Peças, saldo mínimo e movimentos" />
         <LinhaLista para="/interno/instrumentos" titulo={<><Icone nome="lista" tamanho={18} /> Instrumentos</>} detalhe="Analisadores e certificados de calibração" />
         <LinhaLista para="/interno/tipos" titulo={<><Icone nome="lista" tamanho={18} /> Tipos e checklists</>} detalhe="Itens de verificação e medições por tipo" />

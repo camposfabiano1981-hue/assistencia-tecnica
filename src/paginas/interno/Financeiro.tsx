@@ -15,6 +15,7 @@ import {
   criarOrcamento,
   desfazerPagamento,
   enviarOrcamento,
+  itensDaOS,
   novoIdItem,
   pixDaCobranca,
   registrarNotas,
@@ -30,7 +31,8 @@ import {
   type DadosOrcamento,
 } from '../../dados/financeiro';
 import { csvFaturas } from '../../dados/exportar';
-import type { Chamado, Cliente, Equipamento, Fatura, FormaPagamento, ItemValor, Orcamento, OrdemServico, Peca, StatusOrcamento } from '../../tipos';
+import { useServicosAtivos } from '../../dados/servicos';
+import type { Chamado, Cliente, Equipamento, Fatura, FormaPagamento, ItemValor, Orcamento, OrdemServico, Peca, ServicoCatalogo, StatusOrcamento } from '../../tipos';
 import { descreverEquipamento, fmtData, fmtDataHora, fmtMoeda, numeroOS } from '../../util/formato';
 import { deInputData, paraInputData, somarDias } from '../../util/datas';
 import { baixarArquivo } from '../../util/csv';
@@ -254,6 +256,7 @@ export function OrcamentoEditar() {
   const navegar = useNavigate();
   const { perfil, empresa } = useSessao();
   const pecas = usePecasAtivas();
+  const servicos = useServicosAtivos();
   const existente = useDocumento<Orcamento>(id ? `orcamentos/${id}` : null);
   const clientes = useConsulta<Cliente>(() => query(collection(db, 'clientes'), orderBy('nome')), []);
   const [f, setF] = useState<FormOrc | null>(null);
@@ -295,7 +298,7 @@ export function OrcamentoEditar() {
         equipamentoOutro: '',
         chamadoId: params.get('chamado'),
         osId: params.get('os'),
-        itens: [{ id: novoIdItem(), tipo: 'servico', descricao: 'Mão de obra técnica', quantidade: 1, valorUnitario: 0 }],
+        itens: [],
         desconto: 0,
         validade: paraInputData(somarDias(new Date(), empresa.orcValidadeDias ?? 10)),
         prazoExecucao: 'Até 2 dias úteis após a aprovação',
@@ -409,7 +412,7 @@ export function OrcamentoEditar() {
         )}
       </Cartao>
       <Cartao titulo="Itens">
-        <EditorItens itens={f.itens} desconto={f.desconto} pecas={pecas} aoMudar={(itens, desconto) => setF({ ...f, itens, desconto })} />
+        <EditorItens itens={f.itens} desconto={f.desconto} pecas={pecas} servicos={servicos} aoMudar={(itens, desconto) => setF({ ...f, itens, desconto })} />
       </Cartao>
       <Cartao titulo="Condições">
         <div className="grade grade-2">
@@ -567,6 +570,7 @@ export function FaturaNova() {
   const [params] = useSearchParams();
   const navegar = useNavigate();
   const pecas = usePecasAtivas();
+  const servicos = useServicosAtivos();
   const clientes = useConsulta<Cliente>(() => query(collection(db, 'clientes'), orderBy('nome')), []);
   const [f, setF] = useState<{
     clienteId: string;
@@ -618,21 +622,13 @@ export function FaturaNova() {
           base.descricao = `OS ${numeroOS(o.numero)} - ${o.equipamento.tipoNome}`;
           const ja = await getDocs(query(collection(db, 'faturas'), where('osIds', 'array-contains', o.id)));
           if (!ja.empty) setAviso(`Esta OS já aparece na fatura nº ${ja.docs[0].id}.`);
-          const precos = new Map((await getDocs(collection(db, 'pecas'))).docs.map((d) => [d.id, (d.data() as Peca).preco]));
-          base.itens = [
-            { id: novoIdItem(), tipo: 'servico', descricao: `Mão de obra técnica - OS ${numeroOS(o.numero)}`, quantidade: 1, valorUnitario: 0 },
-            ...(o.pecas ?? []).map((p) => ({
-              id: novoIdItem(),
-              tipo: 'peca' as const,
-              descricao: p.descricao,
-              quantidade: p.quantidade,
-              valorUnitario: (p.pecaId && precos.get(p.pecaId)) || 0,
-              pecaId: p.pecaId ?? null,
-            })),
-          ];
+          const [estoque, tabela] = await Promise.all([getDocs(collection(db, 'pecas')), getDocs(collection(db, 'servicos'))]);
+          base.itens = itensDaOS(o, {
+            pecas: new Map(estoque.docs.map((d) => [d.id, (d.data() as Peca).preco])),
+            servicos: new Map(tabela.docs.map((d) => [d.id, (d.data() as ServicoCatalogo).preco])),
+          });
         }
       }
-      if (!base.itens.length) base.itens = [{ id: novoIdItem(), tipo: 'servico', descricao: '', quantidade: 1, valorUnitario: 0 }];
       if (ativo) setF(base);
     })().catch((e) => setErro(mensagemErro(e)));
     return () => {
@@ -692,7 +688,7 @@ export function FaturaNova() {
         <Campo rotulo="Vencimento" type="date" value={f.vencimento} onChange={(e) => setF({ ...f, vencimento: e.target.value })} />
       </Cartao>
       <Cartao titulo="Itens">
-        <EditorItens itens={f.itens} desconto={f.desconto} pecas={pecas} aoMudar={(itens, desconto) => setF({ ...f, itens, desconto })} />
+        <EditorItens itens={f.itens} desconto={f.desconto} pecas={pecas} servicos={servicos} aoMudar={(itens, desconto) => setF({ ...f, itens, desconto })} />
       </Cartao>
       <Cartao>
         <AreaTexto rotulo="Observações (aparecem na fatura)" rows={2} value={f.observacoes} onChange={(e) => setF({ ...f, observacoes: e.target.value })} />
