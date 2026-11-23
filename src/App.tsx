@@ -10,6 +10,7 @@ import { MeusEquipamentos } from './paginas/portal/Equipamentos';
 import { ContaCliente } from './paginas/portal/Conta';
 import { FinanceiroCliente, OrcamentoCliente, FaturaCliente } from './paginas/portal/Financeiro';
 import { Financeiro, OrcamentoEditar, OrcamentoDetalhe, FaturaNova, FaturaDetalhe } from './paginas/interno/Financeiro';
+import { Vencimentos, ListaInstrumentos, InstrumentoEditar, ListaEstoque, PecaDetalhe } from './paginas/interno/Controle';
 import { Painel } from './paginas/interno/Painel';
 import { ListaChamados, ChamadoInterno, NovoChamadoInterno } from './paginas/interno/Chamados';
 import { ListaOS, NovaOS } from './paginas/interno/OS';
@@ -71,6 +72,11 @@ export function App() {
               <Route path="orcamentos/:id/editar" element={<OrcamentoEditar />} />
               <Route path="faturas/nova" element={<FaturaNova />} />
               <Route path="faturas/:id" element={<FaturaDetalhe />} />
+              <Route path="vencimentos" element={<Vencimentos />} />
+              <Route path="instrumentos" element={<ListaInstrumentos />} />
+              <Route path="instrumentos/:id" element={<InstrumentoEditar />} />
+              <Route path="estoque" element={<ListaEstoque />} />
+              <Route path="estoque/:id" element={<PecaDetalhe />} />
             </Route>
           </Route>
 

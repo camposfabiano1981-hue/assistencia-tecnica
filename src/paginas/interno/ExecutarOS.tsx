@@ -4,16 +4,19 @@ import { Link, useParams } from 'react-router';
 import { useSessao } from '../../sessao';
 import { mensagemErro, useDocumento } from '../../dados/hooks';
 import { adicionarFotoOS, concluirOS, iniciarOS, removerFotoOS, salvarOS } from '../../dados/operacoes';
-import type { Cliente, OrdemServico, ResultadoItem } from '../../tipos';
-import { fmtDataHora, numeroOS, rotuloStatusOS, rotuloTipoOS, tomStatusOS } from '../../util/formato';
-import { arrayRemove, arrayUnion } from 'firebase/firestore';
+import type { Cliente, Instrumento, InstrumentoUsado, OrdemServico, Peca, ResultadoItem } from '../../tipos';
+import { fmtData, fmtDataHora, numeroOS, rotuloStatusOS, rotuloTipoOS, tomStatusOS } from '../../util/formato';
+import { arrayRemove, arrayUnion, collection, orderBy, query } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { useConsulta } from '../../dados/hooks';
+import { somarMeses, diasAte } from '../../util/datas';
 import { avaliarMedicao, ordenados } from '../../util/medicao';
 import { abrirWhatsApp } from '../../util/whatsapp';
 import { PadAssinatura, type AssinaturaRef } from '../../componentes/Assinatura';
 import { GaleriaFotos } from '../../componentes/Fotos';
 import { Icone } from '../../componentes/Icone';
 import { BotaoLaudo } from '../../componentes/Laudo';
-import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, IndicadorSincronia, Info, Selo, Vazio } from '../../componentes/ui';
+import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, IndicadorSincronia, Info, LinkBotao, Selo, Vazio } from '../../componentes/ui';
 
 const ROTULO: Record<ResultadoItem, string> = { ok: 'Conforme', nok: 'Não conf.', na: 'N/A' };
 
@@ -85,6 +88,8 @@ export function ExecutarOS() {
 
       <Checklist os={os} editavel={editavel} />
       <Medicoes os={os} editavel={editavel} />
+      <Instrumentos os={os} editavel={editavel} />
+      <Exigencias os={os} editavel={editavel} />
 
       <Cartao titulo={`Fotos (${os.qtdFotos ?? 0})`}>
         <GaleriaFotos
@@ -99,7 +104,7 @@ export function ExecutarOS() {
         <TextoOS rotulo="Serviço executado" valor={os.servicoExecutado} desabilitado={!editavel} aoSalvar={(v) => salvarOS(os.id, { servicoExecutado: v })} />
         <Pecas os={os} editavel={editavel} />
         <TextoOS
-          rotulo="Instrumentos utilizados"
+          rotulo="Outros instrumentos (texto livre)"
           linhas={2}
           valor={os.instrumentos}
           desabilitado={!editavel}
@@ -113,6 +118,9 @@ export function ExecutarOS() {
       {!concluida && (
         <div className="acoes-coluna">
           <BotaoLaudo os={os} rotulo="Pré-visualizar laudo (rascunho)" bloco />
+          <LinkBotao para={`/interno/orcamentos/novo?os=${os.id}`} variante="secundario" icone="moeda" bloco>
+            Fazer orçamento desta OS
+          </LinkBotao>
         </div>
       )}
     </>
@@ -295,13 +303,19 @@ function Medicoes({ os, editavel }: { os: OrdemServico; editavel: boolean }) {
 function Pecas({ os, editavel }: { os: OrdemServico; editavel: boolean }) {
   const [descricao, setDescricao] = useState('');
   const [qtd, setQtd] = useState('1');
+  const [pecaId, setPecaId] = useState('');
+  const estoque = useConsulta<Peca>(() => (editavel ? query(collection(db, 'pecas'), orderBy('descricao')) : null), [editavel]);
   const pecas = os.pecas ?? [];
   const incluir = () => {
-    if (!descricao.trim()) return;
-    const peca = { id: crypto.randomUUID().slice(0, 8), descricao: descricao.trim(), quantidade: Math.max(1, Number(qtd) || 1) };
+    const doEstoque = estoque.itens.find((x) => x.id === pecaId);
+    const texto = doEstoque?.descricao ?? descricao.trim();
+    if (!texto) return;
+    const quantidade = Math.max(0.01, Number(qtd.replace(',', '.')) || 1);
+    const peca = { id: crypto.randomUUID().slice(0, 8), descricao: texto, quantidade, pecaId: doEstoque?.id ?? null };
     salvarOS(os.id, { pecas: arrayUnion(peca) });
     setDescricao('');
     setQtd('1');
+    setPecaId('');
   };
   return (
     <div className="campo">
@@ -310,7 +324,8 @@ function Pecas({ os, editavel }: { os: OrdemServico; editavel: boolean }) {
       {pecas.map((p, i) => (
         <div className="editor-linha" key={p.id ?? i}>
           <span style={{ flex: 1 }}>
-            {p.quantidade} × {p.descricao}
+            {String(p.quantidade).replace('.', ',')} × {p.descricao}
+            {p.pecaId && <span className="pequeno"> · estoque{os.status === 'concluida' ? ' (baixado)' : ''}</span>}
           </span>
           {editavel && (
             <button type="button" className="icone-botao" aria-label="Remover peça" onClick={() => salvarOS(os.id, { pecas: arrayRemove(p) })}>
@@ -319,9 +334,22 @@ function Pecas({ os, editavel }: { os: OrdemServico; editavel: boolean }) {
           )}
         </div>
       ))}
+      {editavel && !!estoque.itens.length && (
+        <select className="seletor-acao" style={{ width: '100%', marginBottom: 8 }} aria-label="Peça do estoque" value={pecaId} onChange={(e) => setPecaId(e.target.value)}>
+          <option value="">Peça do estoque (ou digite abaixo uma avulsa)…</option>
+          {estoque.itens
+            .filter((x) => x.ativo !== false)
+            .map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.descricao} — saldo {String(x.quantidade).replace('.', ',')} {x.unidade}
+              </option>
+            ))}
+        </select>
+      )}
       {editavel && (
         <div className="editor-linha">
-          <input placeholder="Peça (ex.: guarnição da porta)" value={descricao} onChange={(e) => setDescricao(e.target.value)} aria-label="Descrição da peça" />
+          {!pecaId && <input placeholder="Peça avulsa (ex.: guarnição da porta)" value={descricao} onChange={(e) => setDescricao(e.target.value)} aria-label="Descrição da peça" />}
+          {pecaId && <span style={{ flex: 1 }} className="pequeno">Quantidade usada:</span>}
           <input className="curto" inputMode="numeric" value={qtd} onChange={(e) => setQtd(e.target.value)} aria-label="Quantidade" />
           <Botao type="button" variante="secundario" onClick={incluir}>
             Incluir
@@ -400,6 +428,9 @@ function Concluida({ os, zap }: { os: OrdemServico; zap?: string }) {
       </p>
       <div className="acoes-coluna">
         <BotaoLaudo os={os} rotulo="Gerar laudo e enviar" bloco />
+        <LinkBotao para={`/interno/faturas/nova?os=${os.id}`} variante="secundario" icone="moeda" bloco>
+          Faturar esta OS
+        </LinkBotao>
         {zap && (
           <Botao
             variante="whatsapp"
@@ -416,6 +447,95 @@ function Concluida({ os, zap }: { os: OrdemServico; zap?: string }) {
           </Botao>
         )}
       </div>
+    </Cartao>
+  );
+}
+
+/** Instrumentos de medição usados (rastreabilidade RBC). Certificado vencido não pode ser escolhido. */
+function Instrumentos({ os, editavel }: { os: OrdemServico; editavel: boolean }) {
+  const { itens } = useConsulta<Instrumento>(() => query(collection(db, 'instrumentos'), orderBy('descricao')), []);
+  const usados = os.instrumentosUsados ?? [];
+  const disponiveis = itens.filter((i) => i.ativo !== false || usados.some((u) => u.id === i.id));
+  if (!disponiveis.length && !usados.length) {
+    return editavel ? (
+      <Cartao titulo="Instrumentos de medição">
+        <p className="pequeno" style={{ margin: 0 }}>
+          Cadastre analisadores e termômetros em <Link to="/interno/instrumentos">Instrumentos</Link> para registrá-los no laudo com o certificado.
+        </p>
+      </Cartao>
+    ) : null;
+  }
+  const alternar = (i: Instrumento) => {
+    const atual = usados.find((u) => u.id === i.id);
+    if (atual) return salvarOS(os.id, { instrumentosUsados: arrayRemove(atual) });
+    const snap: InstrumentoUsado = {
+      id: i.id,
+      descricao: [i.descricao, i.fabricante, i.modelo].filter(Boolean).join(' '),
+      ...(i.numeroSerie ? { numeroSerie: i.numeroSerie } : {}),
+      ...(i.certificado ? { certificado: i.certificado } : {}),
+      ...(i.laboratorio ? { laboratorio: i.laboratorio } : {}),
+      validade: i.validade ?? null,
+    };
+    salvarOS(os.id, { instrumentosUsados: arrayUnion(snap) });
+  };
+  const lista = editavel ? disponiveis : [];
+  return (
+    <Cartao titulo={`Instrumentos de medição (${usados.length})`}>
+      {lista.map((i) => {
+        const vencido = !!i.validade && diasAte(i.validade.toDate()) < 0;
+        const marcado = usados.some((u) => u.id === i.id);
+        return (
+          <label key={i.id} className="marcador" style={{ opacity: vencido && !marcado ? 0.6 : 1 }}>
+            <input type="checkbox" checked={marcado} disabled={vencido && !marcado} onChange={() => alternar(i)} />
+            <span>
+              {i.descricao} {i.numeroSerie && `· série ${i.numeroSerie}`}
+              <br />
+              <span className="pequeno">
+                {vencido ? <strong style={{ color: 'var(--perigo)' }}>Certificado vencido em {fmtData(i.validade)}</strong> : `Certificado ${i.certificado ?? '—'} · válido até ${fmtData(i.validade)}`}
+              </span>
+            </span>
+          </label>
+        );
+      })}
+      {!editavel &&
+        usados.map((u) => (
+          <p key={u.id} style={{ margin: '4px 0' }}>
+            {u.descricao} {u.numeroSerie && `· série ${u.numeroSerie}`} <span className="pequeno">· cert. {u.certificado ?? '—'} · válido até {fmtData(u.validade)}</span>
+          </p>
+        ))}
+    </Cartao>
+  );
+}
+
+/** Exigências periódicas que este atendimento cumpre: ao concluir, o vencimento do equipamento avança. */
+function Exigencias({ os, editavel }: { os: OrdemServico; editavel: boolean }) {
+  const exigencias = os.exigencias ?? [];
+  if (!exigencias.length) return null;
+  const cumpre = os.cumpre ?? [];
+  const base = os.fimEm?.toDate() ?? new Date();
+  return (
+    <Cartao titulo="Este atendimento cumpre">
+      {exigencias.map((e) => {
+        const marcado = cumpre.includes(e.codigo);
+        return (
+          <label key={e.codigo} className="marcador">
+            <input
+              type="checkbox"
+              checked={marcado}
+              disabled={!editavel}
+              onChange={() => salvarOS(os.id, { cumpre: marcado ? arrayRemove(e.codigo) : arrayUnion(e.codigo) })}
+            />
+            <span>
+              {e.descricao}
+              <br />
+              <span className="pequeno">
+                {marcado ? `Próximo vencimento: ${somarMeses(base, e.periodicidadeMeses).toLocaleDateString('pt-BR')}` : `A cada ${e.periodicidadeMeses} meses`}
+              </span>
+            </span>
+          </label>
+        );
+      })}
+      {editavel && <p className="pequeno" style={{ margin: 0 }}>Marque só o que foi feito de fato: a data entra no laudo e na ficha do equipamento.</p>}
     </Cartao>
   );
 }

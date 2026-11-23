@@ -5,7 +5,9 @@ import { db } from '../../firebase';
 import { useSessao } from '../../sessao';
 import { mensagemErro, useConsulta, useDocumento } from '../../dados/hooks';
 import { agendarChamado, criarChamado, criarOS, mudarStatusChamado } from '../../dados/operacoes';
-import type { Chamado, Cliente, Equipamento, StatusChamado, TipoOS, Usuario } from '../../tipos';
+import type { Chamado, Cliente, Equipamento, Orcamento, StatusChamado, TipoOS, Usuario } from '../../tipos';
+import { rotuloStatusOrcamento, tomStatusOrcamento } from '../../dados/financeiro';
+import { fmtMoeda } from '../../util/formato';
 import {
   fmtDataHora,
   fmtRelativo,
@@ -204,6 +206,7 @@ export function ChamadoInterno() {
       {!encerrado && <Agendar chamado={c} nome={nome} zap={zap} />}
 
       <OSDoChamado chamado={c} cliente={cliente.dados} />
+      <OrcamentosDoChamado chamado={c} />
 
       {zap && (
         <Cartao titulo="Mensagens para o cliente (WhatsApp)">
@@ -385,6 +388,34 @@ function OSDoChamado({ chamado, cliente }: { chamado: Chamado; cliente: Cliente 
       <Botao icone="chave" carregando={criando} disabled={equipamento.carregando || equipe.carregando || !cliente} onClick={criar} bloco>
         Criar OS
       </Botao>
+    </Cartao>
+  );
+}
+
+function OrcamentosDoChamado({ chamado }: { chamado: Chamado }) {
+  const { itens } = useConsulta<Orcamento>(() => query(collection(db, 'orcamentos'), where('chamadoId', '==', chamado.id)), [chamado.id]);
+  const lista = [...itens].sort((a, b) => b.numero - a.numero);
+  if (chamado.status === 'cancelado' && !lista.length) return null;
+  return (
+    <Cartao
+      titulo="Orçamentos"
+      acoes={chamado.status !== 'cancelado' && <LinkBotao para={`/interno/orcamentos/novo?chamado=${chamado.id}`} variante="secundario" icone="mais_circulo">Fazer orçamento</LinkBotao>}
+    >
+      {!lista.length ? (
+        <p className="pequeno" style={{ margin: 0 }}>Se o reparo precisar de aprovação de valores, faça o orçamento: o cliente aprova pelo portal.</p>
+      ) : (
+        <div className="lista">
+          {lista.map((o) => (
+            <LinhaLista
+              key={o.id}
+              para={`/interno/orcamentos/${o.id}`}
+              titulo={`Orç. ${String(o.numero).padStart(5, '0')} · ${fmtMoeda(o.total)}`}
+              detalhe={o.resposta ? `${o.resposta.status === 'aprovado' ? 'Aprovado' : 'Recusado'} por ${o.resposta.nome}` : undefined}
+              lateral={<Selo tom={tomStatusOrcamento[o.status]}>{rotuloStatusOrcamento[o.status]}</Selo>}
+            />
+          ))}
+        </div>
+      )}
     </Cartao>
   );
 }

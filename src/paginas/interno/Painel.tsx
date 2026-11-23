@@ -8,6 +8,7 @@ import type { Chamado, OrdemServico } from '../../tipos';
 import { fmtDataHora, fmtRelativo, numeroOS, rotuloStatusOS, rotuloTipoOS, tomStatusOS } from '../../util/formato';
 import { alertasAtivos, prepararAlertas, tocarAlerta } from '../../util/alerta';
 import { Aviso, Botao, CabecalhoPagina, Carregando, Cartao, LinhaLista, LinkBotao, Selo } from '../../componentes/ui';
+import { QuadroAtencao } from '../../componentes/Atencao';
 
 function AtivarAlertas() {
   const [ativo, setAtivo] = useState(alertasAtivos());
@@ -112,6 +113,8 @@ export function Painel() {
           </div>
         )}
       </Cartao>
+
+      <QuadroAtencao />
 
       <Cartao titulo="Agenda de atendimentos">
         {ordens.carregando ? (

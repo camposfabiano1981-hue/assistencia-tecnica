@@ -9,7 +9,23 @@ const itens = (lista: string[]) => lista.map((texto, i) => ({ id: `i${i + 1}`, t
 const ATERRAMENTO = { id: 'm-terra', nome: 'Resistência de aterramento', unidade: 'Ω', min: null, max: 0.3 };
 const ISOLACAO = { id: 'm-isol', nome: 'Resistência de isolação', unidade: 'MΩ', min: 2, max: null };
 
-export const TIPOS_PADRAO: Modelo[] = [
+// Exigências periódicas sugeridas (além da preventiva). Periodicidade é um ponto de partida:
+// confira manual do fabricante, normas e a orientação da vigilância sanitária local.
+const ENSAIO_62353 = {
+  codigo: 'ensaio-62353',
+  descricao: 'Ensaio de segurança elétrica (ABNT NBR IEC 62353)',
+  periodicidadeMeses: 12,
+};
+export const EXIGENCIAS_SUGERIDAS: Record<string, { codigo: string; descricao: string; periodicidadeMeses: number }[]> = {
+  autoclave: [{ codigo: 'qualificacao-termica', descricao: 'Qualificação térmica e calibração dos instrumentos (RDC 15/2012)', periodicidadeMeses: 12 }],
+  'raio-x-intraoral': [{ codigo: 'testes-raio-x', descricao: 'Testes de constância do raio-X (RDC 611/2022 e IN 95/2021)', periodicidadeMeses: 12 }],
+  'monitor-multiparametrico': [ENSAIO_62353],
+  desfibrilador: [ENSAIO_62353],
+  'bisturi-eletrico': [ENSAIO_62353],
+  'bomba-infusao': [ENSAIO_62353],
+};
+
+const BASE: Modelo[] = [
   {
     id: 'autoclave',
     nome: 'Autoclave',
@@ -216,3 +232,5 @@ export const TIPOS_PADRAO: Modelo[] = [
     medicoes: [ATERRAMENTO, ISOLACAO],
   },
 ];
+
+export const TIPOS_PADRAO: Modelo[] = BASE.map((t) => ({ ...t, exigencias: EXIGENCIAS_SUGERIDAS[t.id] ?? [] }));
