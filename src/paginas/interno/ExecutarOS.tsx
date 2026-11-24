@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router';
 import { useSessao } from '../../sessao';
 import { mensagemErro, useDocumento } from '../../dados/hooks';
 import { adicionarFotoOS, concluirOS, iniciarOS, removerFotoOS, salvarOS } from '../../dados/operacoes';
-import type { Cliente, Fatura, Instrumento, InstrumentoUsado, Orcamento, OrdemServico, Peca, ResultadoItem, ServicoCatalogo, ServicoUsado } from '../../tipos';
+import type { Avaliacao, Cliente, Fatura, Instrumento, InstrumentoUsado, Orcamento, OrdemServico, Peca, ResultadoItem, ServicoCatalogo, ServicoUsado } from '../../tipos';
 import { fmtData, fmtDataHora, numeroOS, rotuloStatusOS, rotuloTipoOS, tomStatusOS } from '../../util/formato';
 import { arrayRemove, arrayUnion, collection, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -18,6 +18,8 @@ import { Icone } from '../../componentes/Icone';
 import { BotaoLaudo } from '../../componentes/Laudo';
 import { BotaoVisualizarLaudo } from '../../componentes/Documentos';
 import { formatarCodigo } from '../../util/verificacao';
+import { Estrelas } from '../../componentes/Avaliacao';
+import { ROTULO_NOTA } from '../../dados/avaliacoes';
 import { rotuloStatusOrcamento } from '../../dados/financeiro';
 import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, IndicadorSincronia, Info, LinkBotao, Selo, Vazio } from '../../componentes/ui';
 
@@ -529,12 +531,21 @@ function Conclusao({ os }: { os: OrdemServico }) {
 }
 
 function Concluida({ os, zap }: { os: OrdemServico; zap?: string }) {
+  const avaliacao = useDocumento<Avaliacao>(`avaliacoes/${os.id}`);
   return (
     <Cartao titulo="OS concluída" className="cartao-destaque">
       <p style={{ marginTop: 0 }}>
         Assinada por <strong>{os.assinatura?.nome}</strong> em {fmtDataHora(os.assinatura?.em)}.{' '}
         {os.liberado ? 'Equipamento liberado para uso.' : <strong style={{ color: 'var(--perigo)' }}>Equipamento NÃO liberado para uso.</strong>}
       </p>
+      {avaliacao.dados ? (
+        <p>
+          Avaliação do cliente: <Estrelas nota={avaliacao.dados.nota} /> <strong>{ROTULO_NOTA[avaliacao.dados.nota]}</strong>
+          {avaliacao.dados.comentario && <span className="pequeno" style={{ display: 'block' }}>“{avaliacao.dados.comentario}”</span>}
+        </p>
+      ) : (
+        !avaliacao.carregando && <p className="pequeno">O cliente ainda não avaliou o atendimento.</p>
+      )}
       {os.codigoVerificacao && (
         <p className="pequeno">
           Código de autenticidade do laudo:{' '}
@@ -557,7 +568,7 @@ function Concluida({ os, zap }: { os: OrdemServico; zap?: string }) {
             onClick={() =>
               abrirWhatsApp(
                 zap,
-                `Olá! O atendimento da OS ${numeroOS(os.numero)} (${os.equipamento.tipoNome}) foi concluído. O laudo também fica disponível no portal: ${location.origin}/portal/equipamentos`,
+                `Olá! O atendimento da OS ${numeroOS(os.numero)} (${os.equipamento.tipoNome}) foi concluído. O laudo fica no portal: ${location.origin}/portal/equipamentos\n\nConte como foi o atendimento (leva 10 segundos): ${location.origin}/portal/avaliar/${os.id}`,
               )
             }
           >

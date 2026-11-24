@@ -448,3 +448,52 @@ describe('autenticidade dos laudos (Fase 3)', () => {
     await assertFails(deleteDoc(doc(fs('gestor'), `verificacoes/${CODIGO}`)));
   });
 });
+
+describe('avaliação do atendimento (Fase 3)', () => {
+  const avaliacao = (extra: Record<string, unknown> = {}) => ({
+    osId: '1',
+    osNumero: 1,
+    chamadoId: null,
+    clienteId: 'c1',
+    clienteNome: 'Clínica',
+    tecnicoId: 'tec',
+    tecnicoNome: 'Técnico',
+    nota: 5,
+    comentario: 'Rápido e caprichoso',
+    por: { uid: 'cli1', nome: 'Dra. Ana' },
+    em: serverTimestamp(),
+    ...extra,
+  });
+  const concluirOS1 = () =>
+    env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'os/1'), { status: 'concluida' });
+    });
+
+  it('o cliente avalia uma vez a própria OS concluída', async () => {
+    await semear();
+    await criarOS(fs('tec'));
+    await assertFails(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao()));
+    await concluirOS1();
+    await assertSucceeds(getDoc(doc(fs('cli1'), 'avaliacoes/1')));
+    await assertFails(setDoc(doc(fs('cli2'), 'avaliacoes/1'), avaliacao({ clienteId: 'c2', por: { uid: 'cli2', nome: 'B' } })));
+    await assertFails(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao({ nota: 6 })));
+    await assertFails(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao({ nota: 4.5 })));
+    await assertFails(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao({ por: { uid: 'outro', nome: 'X' } })));
+    await assertFails(setDoc(doc(fs('tec'), 'avaliacoes/1'), avaliacao()));
+    await assertSucceeds(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao()));
+    await assertFails(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao({ nota: 1 })));
+    await assertFails(updateDoc(doc(fs('cli1'), 'avaliacoes/1'), { nota: 1 }));
+    await assertFails(deleteDoc(doc(fs('gestor'), 'avaliacoes/1')));
+  });
+
+  it('a equipe lê todas; cada cliente só as próprias', async () => {
+    await semear();
+    await criarOS(fs('tec'));
+    await concluirOS1();
+    await assertSucceeds(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao()));
+    await assertSucceeds(getDocs(collection(fs('tec'), 'avaliacoes')));
+    await assertSucceeds(getDocs(query(collection(fs('cli1'), 'avaliacoes'), where('clienteId', '==', 'c1'))));
+    await assertFails(getDoc(doc(fs('cli2'), 'avaliacoes/1')));
+    await assertFails(getDocs(collection(fs('cli1'), 'avaliacoes')));
+  });
+});

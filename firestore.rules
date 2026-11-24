@@ -279,6 +279,21 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ---------- Avaliação do atendimento: uma por OS concluída, feita pelo próprio cliente ----------
+    match /avaliacoes/{osId} {
+      function osAvaliada() { return get(/databases/$(database)/documents/os/$(osId)).data; }
+      // resource == null: o cliente pode perguntar se a OS já foi avaliada.
+      allow get: if equipe() || (cliente() && (resource == null || resource.data.clienteId == meuCliente()));
+      allow list: if equipe() || (cliente() && resource.data.clienteId == meuCliente());
+      allow create: if cliente()
+        && osAvaliada().clienteId == meuCliente() && osAvaliada().status == 'concluida'
+        && dados().osId == osId && dados().clienteId == meuCliente()
+        && dados().nota is int && dados().nota >= 1 && dados().nota <= 5
+        && (!('comentario' in dados()) || texto(dados().comentario, 1000))
+        && dados().por.uid == request.auth.uid && dados().em == request.time;
+      allow update, delete: if false;
+    }
+
     // ---------- Catálogo de serviços (tabela de preços): só a equipe ----------
     match /servicos/{id} {
       allow read: if equipe();

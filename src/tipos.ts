@@ -457,3 +457,20 @@ export interface Fatura {
   nfe?: { numero: string; chave?: string } | null;
   atualizadaEm: Timestamp;
 }
+
+/** Avaliação do atendimento pelo cliente (avaliacoes/{osId}): uma por OS concluída. */
+export interface Avaliacao {
+  id: string;
+  osId: string;
+  osNumero: number;
+  chamadoId: string | null;
+  clienteId: string;
+  clienteNome: string;
+  tecnicoId: string;
+  tecnicoNome: string;
+  /** 1 a 5 */
+  nota: number;
+  comentario?: string;
+  por: { uid: string; nome: string };
+  em: Timestamp;
+}

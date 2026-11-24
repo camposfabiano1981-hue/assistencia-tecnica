@@ -10,6 +10,7 @@ import { NovoChamadoPortal } from './paginas/portal/NovoChamado';
 import { MeusEquipamentos } from './paginas/portal/Equipamentos';
 import { ContaCliente } from './paginas/portal/Conta';
 import { FinanceiroCliente, OrcamentoCliente, FaturaCliente } from './paginas/portal/Financeiro';
+import { AvaliarOS } from './paginas/portal/Avaliar';
 import { Financeiro, OrcamentoEditar, OrcamentoDetalhe, FaturaNova, FaturaDetalhe } from './paginas/interno/Financeiro';
 import { Vencimentos, ListaInstrumentos, InstrumentoEditar, ListaEstoque, PecaDetalhe } from './paginas/interno/Controle';
 import { Painel } from './paginas/interno/Painel';
@@ -47,6 +48,7 @@ export function App() {
               <Route path="financeiro" element={<FinanceiroCliente />} />
               <Route path="orcamentos/:id" element={<OrcamentoCliente />} />
               <Route path="faturas/:id" element={<FaturaCliente />} />
+              <Route path="avaliar/:osId" element={<AvaliarOS />} />
             </Route>
           </Route>
 
