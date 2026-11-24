@@ -59,7 +59,6 @@ img { max-width: 100%; display: block; }
   display: grid; place-items: center; width: 44px; height: 44px; flex: none;
   background: transparent; border: 0; border-radius: 10px; color: #fff; cursor: pointer;
 }
-.topo-menu:hover, .menu-fechar:hover { background: rgba(255, 255, 255, 0.12); }
 .topo-menu:focus-visible, .menu-fechar:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
 .marca { display: flex; align-items: center; gap: 10px; font-weight: 650; min-width: 0; flex: 1; }
 .marca img, .marca-inicial { width: 32px; height: 32px; flex: none; border-radius: 8px; }
@@ -95,7 +94,6 @@ img { max-width: 100%; display: block; }
   font: inherit; font-size: 0.95rem; font-weight: 600; line-height: 1.25; text-align: left; text-decoration: none; cursor: pointer;
 }
 .menu-item svg { flex: none; }
-.menu-item:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
 .menu-item:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
 .menu-item.active { background: rgba(255, 255, 255, 0.16); color: #fff; }
 .menu-grupo-seta { margin-left: auto; transition: transform 0.15s ease; opacity: 0.75; }
@@ -107,7 +105,6 @@ img { max-width: 100%; display: block; }
   content: ''; position: absolute; left: 24px; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--menu-marca);
 }
 .menu-item.menu-destaque { margin: 6px 0; background: #fff; color: var(--primaria); }
-.menu-item.menu-destaque:hover { background: #eaf5f9; color: var(--primaria-escura); }
 .menu-item.menu-destaque.active { color: var(--primaria-escura); box-shadow: inset 0 0 0 2px var(--menu-marca); }
 .menu-rodape {
   display: flex; align-items: center; gap: 10px;
@@ -125,7 +122,13 @@ img { max-width: 100%; display: block; }
   display: grid; place-items: center; width: 40px; height: 40px; flex: none; cursor: pointer;
   background: transparent; border: 1px solid rgba(255, 255, 255, 0.24); border-radius: 10px; color: #fff;
 }
-.menu-sair:hover { background: rgba(255, 255, 255, 0.1); }
+@media (hover: hover) {
+  /* Realce ao passar o mouse; no celular o toque não deixa o item aceso. */
+  .topo-menu:hover, .menu-fechar:hover { background: rgba(255, 255, 255, 0.12); }
+  .menu-item:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+  .menu-item.menu-destaque:hover { background: #eaf5f9; color: var(--primaria-escura); }
+  .menu-sair:hover { background: rgba(255, 255, 255, 0.1); }
+}
 .menu-sair:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 @media (min-width: 960px) {
   /* No computador o menu fica fixo ao lado do conteúdo, na altura da tela. */
