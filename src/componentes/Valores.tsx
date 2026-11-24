@@ -1,6 +1,7 @@
 // Campos de valor, editor de itens (serviço × peça) e cartão de Pix.
 import { useEffect, useRef, useState } from 'react';
-import type { ItemValor, Peca } from '../tipos';
+import { Link } from 'react-router';
+import type { ItemValor, Peca, ServicoCatalogo } from '../tipos';
 import { calcularTotais, novoIdItem } from '../dados/financeiro';
 import { fmtMoeda, lerMoeda } from '../util/formato';
 import { Icone } from './Icone';
@@ -59,12 +60,15 @@ export function EditorItens({
   desconto,
   aoMudar,
   pecas = [],
+  servicos,
   somenteLeitura,
 }: {
   itens: ItemValor[];
   desconto: number;
   aoMudar?: (itens: ItemValor[], desconto: number) => void;
   pecas?: Peca[];
+  /** Catálogo de serviços (tabela de preços); sem ele, só serviço avulso. */
+  servicos?: ServicoCatalogo[];
   somenteLeitura?: boolean;
 }) {
   const t = calcularTotais(itens, desconto);
@@ -73,7 +77,11 @@ export function EditorItens({
   const novo = (tipo: ItemValor['tipo']) => mudar([...itens, { id: novoIdItem(), tipo, descricao: '', quantidade: 1, valorUnitario: 0 }]);
   const doEstoque = (id: string) => {
     const p = pecas.find((x) => x.id === id);
-    if (p) mudar([...itens, { id: novoIdItem(), tipo: 'peca', descricao: p.descricao, quantidade: 1, valorUnitario: p.preco, pecaId: p.id, codigo: p.codigo }]);
+    if (p) mudar([...itens, { id: novoIdItem(), tipo: 'peca', descricao: p.descricao, quantidade: 1, valorUnitario: p.preco, pecaId: p.id, codigo: p.codigo, unidade: p.unidade }]);
+  };
+  const doCatalogo = (id: string) => {
+    const s = servicos?.find((x) => x.id === id);
+    if (s) mudar([...itens, { id: novoIdItem(), tipo: 'servico', descricao: s.descricao, quantidade: 1, valorUnitario: s.preco, servicoId: s.id, codigo: s.codigo, unidade: s.unidade }]);
   };
 
   return (
@@ -103,7 +111,7 @@ export function EditorItens({
           )}
           <div className="item-valor-numeros">
             <label>
-              <span>Qtd.</span>
+              <span>Qtd.{it.unidade ? ` (${it.unidade})` : ''}</span>
               <CampoNumero rotulo="Quantidade" casas={null} valor={it.quantidade} desabilitado={somenteLeitura} aoMudar={(n) => campo(i, 'quantidade', n)} />
             </label>
             <label>
@@ -118,32 +126,60 @@ export function EditorItens({
         </div>
       ))}
       {!somenteLeitura && (
-        <div className="acoes">
-          <Botao type="button" variante="secundario" icone="mais_circulo" onClick={() => novo('servico')}>
-            Serviço
-          </Botao>
-          <Botao type="button" variante="secundario" icone="mais_circulo" onClick={() => novo('peca')}>
-            Peça avulsa
-          </Botao>
-          {!!pecas.length && (
-            <select
-              aria-label="Adicionar peça do estoque"
-              className="seletor-acao"
-              value=""
-              onChange={(e) => {
-                doEstoque(e.target.value);
-                e.target.value = '';
-              }}
-            >
-              <option value="">+ Peça do estoque…</option>
-              {pecas.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.descricao} — {fmtMoeda(p.preco)} ({p.quantidade} {p.unidade})
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        <>
+          {/* Cada grupo na mesma ordem: primeiro o cadastrado, depois o avulso. */}
+          <div className="acoes">
+            {!!servicos?.length && (
+              <select
+                aria-label="Adicionar serviço cadastrado"
+                className="seletor-acao"
+                value=""
+                onChange={(e) => {
+                  doCatalogo(e.target.value);
+                  e.target.value = '';
+                }}
+              >
+                <option value="">+ Serviço cadastrado…</option>
+                {servicos.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.descricao} — {fmtMoeda(s.preco)}/{s.unidade}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Botao type="button" variante="secundario" icone="mais_circulo" onClick={() => novo('servico')}>
+              Serviço avulso
+            </Botao>
+          </div>
+          <div className="acoes" style={{ marginTop: 8 }}>
+            {!!pecas.length && (
+              <select
+                aria-label="Adicionar peça do estoque"
+                className="seletor-acao"
+                value=""
+                onChange={(e) => {
+                  doEstoque(e.target.value);
+                  e.target.value = '';
+                }}
+              >
+                <option value="">+ Peça do estoque…</option>
+                {pecas.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.descricao} — {fmtMoeda(p.preco)} ({p.quantidade} {p.unidade})
+                  </option>
+                ))}
+              </select>
+            )}
+            <Botao type="button" variante="secundario" icone="mais_circulo" onClick={() => novo('peca')}>
+              Peça avulsa
+            </Botao>
+          </div>
+        </>
+      )}
+      {!somenteLeitura && servicos && !servicos.length && (
+        <p className="pequeno" style={{ marginTop: 0 }}>
+          Dica: cadastre os serviços que você cobra em <Link to="/interno/servicos">Serviços e preços</Link> para escolher daqui com o preço.
+        </p>
       )}
       <dl className="totais">
         <div>

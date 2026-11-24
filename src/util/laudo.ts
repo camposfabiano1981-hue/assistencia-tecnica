@@ -116,6 +116,10 @@ export async function gerarLaudo(os: OrdemServico, empresa: Empresa | null, foto
   f.secao('Diagnóstico e serviço executado');
   f.paragrafo('Diagnóstico', os.diagnostico || '-');
   f.paragrafo('Serviço executado', os.servicoExecutado || '-');
+  if (os.servicos?.length) {
+    const qtd = (n: number) => String(n).replace('.', ',');
+    f.paragrafo('Serviços realizados', os.servicos.map((x) => `${qtd(x.quantidade)}${x.unidade ? ` ${x.unidade}` : ''} x ${x.descricao}`).join('\n'));
+  }
   if (os.pecas?.length) f.paragrafo('Peças substituídas', os.pecas.map((p) => `${p.quantidade} x ${p.descricao}`).join('\n'));
   f.paragrafo('Instrumentos (outros)', os.instrumentos);
   f.paragrafo('Observações', os.observacoes);
@@ -145,33 +149,7 @@ export async function gerarLaudo(os: OrdemServico, empresa: Empresa | null, foto
   );
 
   // ---- Fotos ----
-  if (fotos.length) {
-    f.secao(`Registro fotográfico (${fotos.length})`);
-    const colunas = 3;
-    const gap = 4;
-    const w = (L - gap * (colunas - 1)) / colunas;
-    const h = w * 0.75;
-    fotos.forEach((foto, i) => {
-      const col = i % colunas;
-      if (col === 0) f.garantir(h + 4);
-      const x = M + col * (w + gap);
-      try {
-        const bytes = foto.imagem.toUint8Array();
-        const p = pdf.getImageProperties(bytes);
-        const escala = Math.min(w / p.width, h / p.height);
-        const iw = p.width * escala;
-        const ih = p.height * escala;
-        pdf.setDrawColor(217, 225, 231);
-        pdf.setLineWidth(0.2);
-        pdf.rect(x, f.y, w, h);
-        pdf.addImage(bytes, 'JPEG', x + (w - iw) / 2, f.y + (h - ih) / 2, iw, ih, undefined, 'FAST');
-      } catch {
-        pdf.text('Foto indisponível', x + 2, f.y + 5);
-      }
-      if (col === colunas - 1 || i === fotos.length - 1) f.y += h + gap;
-    });
-    f.y += 2;
-  }
+  f.galeria(`Registro fotográfico (${fotos.length})`, fotos);
 
   // ---- Assinaturas ----
   f.garantir(46);

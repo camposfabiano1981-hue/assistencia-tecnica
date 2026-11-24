@@ -18,6 +18,7 @@ import type { Fatura, Orcamento } from '../../tipos';
 import { fmtData, fmtDataHora, fmtMoeda } from '../../util/formato';
 import { abrirWhatsApp } from '../../util/whatsapp';
 import { BotaoDocumento } from '../../componentes/BotaoDocumento';
+import { BotaoVisualizar } from '../../componentes/Visualizador';
 import { CartaoPix, EditorItens } from '../../componentes/Valores';
 import { AreaTexto, Aviso, Botao, CabecalhoPagina, Carregando, Cartao, Info, LinhaLista, Selo, Vazio } from '../../componentes/ui';
 
@@ -202,6 +203,14 @@ export function OrcamentoCliente() {
             </Botao>
           </div>
         ))}
+      <BotaoVisualizar
+        rotulo="Visualizar orçamento"
+        bloco
+        gerar={async () => {
+          const { gerarOrcamentoPDF } = await import('../../util/documentos');
+          return { arquivo: await gerarOrcamentoPDF(o, empresa), texto: `Orçamento nº ${o.numero}` };
+        }}
+      />
       <BotaoDocumento
         rotulo="Baixar PDF do orçamento"
         texto={`Orçamento nº ${o.numero}`}
@@ -249,6 +258,14 @@ export function FaturaCliente() {
       <Cartao titulo="Itens">
         <EditorItens itens={f.itens} desconto={f.desconto} somenteLeitura />
       </Cartao>
+      <BotaoVisualizar
+        rotulo="Visualizar fatura"
+        bloco
+        gerar={async () => {
+          const { gerarFaturaPDF } = await import('../../util/documentos');
+          return { arquivo: await gerarFaturaPDF(f, empresa, pix), texto: `Fatura nº ${f.numero}` };
+        }}
+      />
       <BotaoDocumento
         rotulo="Baixar PDF da fatura"
         texto={`Fatura nº ${f.numero}`}

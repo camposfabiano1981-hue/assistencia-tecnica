@@ -23,6 +23,7 @@ import { abrirWhatsApp } from '../../util/whatsapp';
 import { FormChamado, type DadosFormChamado } from '../../componentes/FormChamado';
 import { GaleriaFotos } from '../../componentes/Fotos';
 import { Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, Info, LinhaLista, LinkBotao, Selecao, Selo, Vazio } from '../../componentes/ui';
+import { BotaoVisualizarChamado } from '../../componentes/Documentos';
 
 const FILTROS: { valor: StatusChamado | 'todos' | 'ativos'; rotulo: string }[] = [
   { valor: 'ativos', rotulo: 'Em andamento' },
@@ -201,6 +202,9 @@ export function ChamadoInterno() {
             <GaleriaFotos caminho={`chamados/${c.id}/fotos`} />
           </div>
         )}
+        <div className="acoes">
+          <BotaoVisualizarChamado chamado={c} />
+        </div>
       </Cartao>
 
       {!encerrado && <Agendar chamado={c} nome={nome} zap={zap} />}

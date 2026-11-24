@@ -30,6 +30,7 @@ const caminhos: Record<string, string> = {
   moeda: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M15 9.3c-.5-.9-1.6-1.4-3-1.4-1.7 0-3 .8-3 2s1.3 1.7 3 2.1 3 .9 3 2.1-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6.3v11.4',
   calendario: 'M4 6h16v15H4zM4 10h16M8 3v4M16 3v4M8 14h3v3H8z',
   grafico: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+  olho: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6',
 };
 
 export function Icone({ nome, tamanho = 22, className }: { nome: keyof typeof caminhos | string; tamanho?: number; className?: string }) {

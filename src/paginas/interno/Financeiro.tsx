@@ -15,6 +15,7 @@ import {
   criarOrcamento,
   desfazerPagamento,
   enviarOrcamento,
+  itensDaOS,
   novoIdItem,
   pixDaCobranca,
   registrarNotas,
@@ -30,12 +31,14 @@ import {
   type DadosOrcamento,
 } from '../../dados/financeiro';
 import { csvFaturas } from '../../dados/exportar';
-import type { Chamado, Cliente, Equipamento, Fatura, FormaPagamento, ItemValor, Orcamento, OrdemServico, Peca, StatusOrcamento } from '../../tipos';
+import { useServicosAtivos } from '../../dados/servicos';
+import type { Chamado, Cliente, Equipamento, Fatura, FormaPagamento, ItemValor, Orcamento, OrdemServico, Peca, ServicoCatalogo, StatusOrcamento } from '../../tipos';
 import { descreverEquipamento, fmtData, fmtDataHora, fmtMoeda, numeroOS } from '../../util/formato';
 import { deInputData, paraInputData, somarDias } from '../../util/datas';
 import { baixarArquivo } from '../../util/csv';
 import { abrirWhatsApp } from '../../util/whatsapp';
 import { BotaoDocumento } from '../../componentes/BotaoDocumento';
+import { BotaoVisualizar } from '../../componentes/Visualizador';
 import { CampoNumero, CartaoPix, EditorItens } from '../../componentes/Valores';
 import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, Info, LinhaLista, LinkBotao, Selecao, Selo, Vazio } from '../../componentes/ui';
 
@@ -254,6 +257,7 @@ export function OrcamentoEditar() {
   const navegar = useNavigate();
   const { perfil, empresa } = useSessao();
   const pecas = usePecasAtivas();
+  const servicos = useServicosAtivos();
   const existente = useDocumento<Orcamento>(id ? `orcamentos/${id}` : null);
   const clientes = useConsulta<Cliente>(() => query(collection(db, 'clientes'), orderBy('nome')), []);
   const [f, setF] = useState<FormOrc | null>(null);
@@ -295,7 +299,7 @@ export function OrcamentoEditar() {
         equipamentoOutro: '',
         chamadoId: params.get('chamado'),
         osId: params.get('os'),
-        itens: [{ id: novoIdItem(), tipo: 'servico', descricao: 'Mão de obra técnica', quantidade: 1, valorUnitario: 0 }],
+        itens: [],
         desconto: 0,
         validade: paraInputData(somarDias(new Date(), empresa.orcValidadeDias ?? 10)),
         prazoExecucao: 'Até 2 dias úteis após a aprovação',
@@ -409,7 +413,7 @@ export function OrcamentoEditar() {
         )}
       </Cartao>
       <Cartao titulo="Itens">
-        <EditorItens itens={f.itens} desconto={f.desconto} pecas={pecas} aoMudar={(itens, desconto) => setF({ ...f, itens, desconto })} />
+        <EditorItens itens={f.itens} desconto={f.desconto} pecas={pecas} servicos={servicos} aoMudar={(itens, desconto) => setF({ ...f, itens, desconto })} />
       </Cartao>
       <Cartao titulo="Condições">
         <div className="grade grade-2">
@@ -435,6 +439,7 @@ export function OrcamentoDetalhe() {
   const navegar = useNavigate();
   const { dados: o, carregando, erro } = useDocumento<Orcamento>(`orcamentos/${id}`);
   const cliente = useDocumento<Cliente>(o ? `clientes/${o.clienteId}` : null);
+  const chamado = useDocumento<Chamado>(o?.chamadoId ? `chamados/${o.chamadoId}` : null);
   const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso'; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -476,6 +481,9 @@ export function OrcamentoDetalhe() {
         <dl className="infos">
           <Info rotulo="Equipamento">{o.equipamentoId ? <Link to={`/interno/equipamentos/${o.equipamentoId}`}>{o.equipamentoDescricao}</Link> : o.equipamentoDescricao}</Info>
           <Info rotulo="Chamado">{o.chamadoId ? <Link to={`/interno/chamados/${o.chamadoId}`}>nº {o.chamadoId}</Link> : '—'}</Info>
+          <Info rotulo="OS">
+            {(o.osId ?? chamado.dados?.osId) ? <Link to={`/interno/os/${o.osId ?? chamado.dados?.osId}`}>nº {numeroOS(Number(o.osId ?? chamado.dados?.osId))}</Link> : '—'}
+          </Info>
           <Info rotulo="Criado">{`${fmtDataHora(o.criadoEm)} por ${o.criadoPor}`}</Info>
           <Info rotulo="Válido até">{fmtData(o.validadeAte)}</Info>
           <Info rotulo="Enviado">{fmtDataHora(o.enviadoEm)}</Info>
@@ -526,8 +534,16 @@ export function OrcamentoDetalhe() {
             Ir para o chamado (criar/abrir OS)
           </LinkBotao>
         )}
+        <BotaoVisualizar
+          rotulo="Visualizar orçamento"
+          bloco
+          gerar={async () => {
+            const { gerarOrcamentoPDF } = await import('../../util/documentos');
+            return { arquivo: await gerarOrcamentoPDF(o, empresa, link), texto: `Orçamento nº ${o.numero} - ${o.equipamentoDescricao}` };
+          }}
+        />
         <BotaoDocumento
-          rotulo="PDF do orçamento"
+          rotulo="Enviar orçamento (PDF)"
           texto={`Orçamento nº ${o.numero} - ${o.equipamentoDescricao}`}
           bloco
           gerar={async () => {
@@ -567,6 +583,7 @@ export function FaturaNova() {
   const [params] = useSearchParams();
   const navegar = useNavigate();
   const pecas = usePecasAtivas();
+  const servicos = useServicosAtivos();
   const clientes = useConsulta<Cliente>(() => query(collection(db, 'clientes'), orderBy('nome')), []);
   const [f, setF] = useState<{
     clienteId: string;
@@ -618,21 +635,13 @@ export function FaturaNova() {
           base.descricao = `OS ${numeroOS(o.numero)} - ${o.equipamento.tipoNome}`;
           const ja = await getDocs(query(collection(db, 'faturas'), where('osIds', 'array-contains', o.id)));
           if (!ja.empty) setAviso(`Esta OS já aparece na fatura nº ${ja.docs[0].id}.`);
-          const precos = new Map((await getDocs(collection(db, 'pecas'))).docs.map((d) => [d.id, (d.data() as Peca).preco]));
-          base.itens = [
-            { id: novoIdItem(), tipo: 'servico', descricao: `Mão de obra técnica - OS ${numeroOS(o.numero)}`, quantidade: 1, valorUnitario: 0 },
-            ...(o.pecas ?? []).map((p) => ({
-              id: novoIdItem(),
-              tipo: 'peca' as const,
-              descricao: p.descricao,
-              quantidade: p.quantidade,
-              valorUnitario: (p.pecaId && precos.get(p.pecaId)) || 0,
-              pecaId: p.pecaId ?? null,
-            })),
-          ];
+          const [estoque, tabela] = await Promise.all([getDocs(collection(db, 'pecas')), getDocs(collection(db, 'servicos'))]);
+          base.itens = itensDaOS(o, {
+            pecas: new Map(estoque.docs.map((d) => [d.id, (d.data() as Peca).preco])),
+            servicos: new Map(tabela.docs.map((d) => [d.id, (d.data() as ServicoCatalogo).preco])),
+          });
         }
       }
-      if (!base.itens.length) base.itens = [{ id: novoIdItem(), tipo: 'servico', descricao: '', quantidade: 1, valorUnitario: 0 }];
       if (ativo) setF(base);
     })().catch((e) => setErro(mensagemErro(e)));
     return () => {
@@ -692,7 +701,7 @@ export function FaturaNova() {
         <Campo rotulo="Vencimento" type="date" value={f.vencimento} onChange={(e) => setF({ ...f, vencimento: e.target.value })} />
       </Cartao>
       <Cartao titulo="Itens">
-        <EditorItens itens={f.itens} desconto={f.desconto} pecas={pecas} aoMudar={(itens, desconto) => setF({ ...f, itens, desconto })} />
+        <EditorItens itens={f.itens} desconto={f.desconto} pecas={pecas} servicos={servicos} aoMudar={(itens, desconto) => setF({ ...f, itens, desconto })} />
       </Cartao>
       <Cartao>
         <AreaTexto rotulo="Observações (aparecem na fatura)" rows={2} value={f.observacoes} onChange={(e) => setF({ ...f, observacoes: e.target.value })} />
@@ -779,8 +788,16 @@ export function FaturaDetalhe() {
             Enviar cobrança no WhatsApp
           </Botao>
         )}
+        <BotaoVisualizar
+          rotulo="Visualizar fatura"
+          bloco
+          gerar={async () => {
+            const { gerarFaturaPDF } = await import('../../util/documentos');
+            return { arquivo: await gerarFaturaPDF(fat, empresa, pix), texto: `Fatura nº ${fat.numero} - ${fat.descricao}` };
+          }}
+        />
         <BotaoDocumento
-          rotulo="PDF da fatura"
+          rotulo="Enviar fatura (PDF)"
           texto={`Fatura nº ${fat.numero} - ${fat.descricao}`}
           bloco
           gerar={async () => {

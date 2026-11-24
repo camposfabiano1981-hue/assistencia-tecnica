@@ -206,6 +206,37 @@ export class Folha {
     }
   }
 
+  /** Grade de fotos (3 por linha, proporção 4:3, com moldura). */
+  galeria(titulo: string, fotos: { imagem: { toUint8Array(): Uint8Array } }[]): void {
+    if (!fotos.length) return;
+    const { pdf, M, L } = this;
+    this.secao(titulo);
+    const colunas = 3;
+    const gap = 4;
+    const w = (L - gap * (colunas - 1)) / colunas;
+    const h = w * 0.75;
+    fotos.forEach((foto, i) => {
+      const col = i % colunas;
+      if (col === 0) this.garantir(h + 4);
+      const x = M + col * (w + gap);
+      try {
+        const bytes = foto.imagem.toUint8Array();
+        const p = pdf.getImageProperties(bytes);
+        const escala = Math.min(w / p.width, h / p.height);
+        const iw = p.width * escala;
+        const ih = p.height * escala;
+        pdf.setDrawColor(217, 225, 231);
+        pdf.setLineWidth(0.2);
+        pdf.rect(x, this.y, w, h);
+        pdf.addImage(bytes, 'JPEG', x + (w - iw) / 2, this.y + (h - ih) / 2, iw, ih, undefined, 'FAST');
+      } catch {
+        pdf.text('Foto indisponível', x + 2, this.y + 5);
+      }
+      if (col === colunas - 1 || i === fotos.length - 1) this.y += h + gap;
+    });
+    this.y += 2;
+  }
+
   arquivo(nome: string): File {
     return new File([this.pdf.output('blob')], nome, { type: 'application/pdf' });
   }

@@ -29,7 +29,7 @@ export default defineConfig({
         importScripts: ['/sw-extra.js'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/__\//],
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        globPatterns: ['**/*.{js,mjs,css,html,svg,png,ico,woff2}'],
         // Dependências opcionais do jsPDF que o app não usa.
         globIgnores: ['**/html2canvas-*.js', '**/purify.es-*.js', '**/index.es-*.js'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,

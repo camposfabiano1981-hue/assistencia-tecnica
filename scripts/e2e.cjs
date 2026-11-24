@@ -206,7 +206,7 @@ async function assinar(pagina) {
   await t.getByLabel('Serviço executado').fill('Substituição da guarnição, limpeza do filtro e ciclo de teste completo sem carga.');
   await t.getByLabel('Serviço executado').press('Tab');
   await t.getByLabel('Descrição da peça').fill('Guarnição da porta 21 L');
-  await t.getByRole('button', { name: 'Incluir' }).click();
+  await t.getByRole('button', { name: 'Incluir peça' }).click();
   await t.getByLabel('Outros instrumentos (texto livre)').fill('Termômetro digital série TD-77, certificado RBC nº 4521, válido até 08/2027');
   await t.getByLabel('Outros instrumentos (texto livre)').press('Tab');
   await t.screenshot({ path: join(SAIDA, '09-os-execucao.png'), fullPage: true });

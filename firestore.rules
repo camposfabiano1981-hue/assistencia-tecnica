@@ -264,5 +264,12 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
+
+    // ---------- Catálogo de serviços (tabela de preços): só a equipe ----------
+    match /servicos/{id} {
+      allow read: if equipe();
+      allow create, update: if equipe() && texto(dados().descricao, 200) && dados().preco is number && dados().ativo is bool;
+      allow delete: if gestor();
+    }
   }
 }

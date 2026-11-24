@@ -16,6 +16,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  orderBy,
   query,
   runTransaction,
   serverTimestamp,
@@ -391,5 +392,19 @@ describe('faturas, instrumentos e estoque (Fase 2)', () => {
     await assertFails(updateDoc(doc(fs('tec'), 'pecas/p1/movimentos/m1'), { quantidade: 0 }));
     await assertFails(deleteDoc(doc(fs('tec'), 'pecas/p1')));
     await assertSucceeds(deleteDoc(doc(fs('gestor'), 'pecas/p1')));
+  });
+
+  it('catálogo de serviços: só a equipe lê e grava; preço obrigatório; só o gestor apaga', async () => {
+    await semearFase2();
+    const servico = { descricao: 'Visita técnica', unidade: 'visita', preco: 150, ativo: true };
+    await assertFails(setDoc(doc(fs('cli1'), 'servicos/s1'), servico));
+    await assertSucceeds(setDoc(doc(fs('tec'), 'servicos/s1'), servico));
+    await assertFails(setDoc(doc(fs('tec'), 'servicos/s2'), { descricao: 'Sem preço', unidade: 'hora', ativo: true }));
+    await assertFails(setDoc(doc(fs('tec'), 'servicos/s3'), { ...servico, preco: '150' }));
+    await assertFails(getDoc(doc(fs('cli1'), 'servicos/s1')));
+    await assertSucceeds(getDocs(query(collection(fs('tec'), 'servicos'), orderBy('descricao'))));
+    await assertSucceeds(updateDoc(doc(fs('tec'), 'servicos/s1'), { preco: 180 }));
+    await assertFails(deleteDoc(doc(fs('tec'), 'servicos/s1')));
+    await assertSucceeds(deleteDoc(doc(fs('gestor'), 'servicos/s1')));
   });
 });

@@ -365,3 +365,20 @@ div.item-valor-desc { border: 0; padding: 0; min-height: 0; }
 
 /* Cartão logo depois de uma lista solta (ex.: Vencimentos) */
 .lista + .cartao { margin-top: 14px; }
+
+/* ===== Visualizador de documentos (PDF desenhado na tela) ===== */
+.visualizador { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: #3a464e; }
+.visualizador-topo {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 10px 8px 16px; padding-top: max(8px, env(safe-area-inset-top)); background: #1d272e; color: #fff;
+}
+.visualizador-nome { font-weight: 600; font-size: 0.95rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.visualizador-topo .icone-botao { background: transparent; border-color: #4b5a64; color: #fff; }
+.visualizador-corpo { flex: 1; overflow: auto; padding: 12px; overscroll-behavior: contain; }
+.visualizador-paginas { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.visualizador-pagina { background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35); max-width: 100%; height: auto; }
+.visualizador-status { color: #e6edf1; text-align: center; margin: 28px 0; }
+.visualizador-acoes {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  padding: 10px 12px; padding-bottom: max(10px, env(safe-area-inset-bottom)); background: #1d272e;
+}

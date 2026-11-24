@@ -124,6 +124,25 @@ async function marcar(caixa) {
   for (const fim = Date.now() + 5000; Date.now() < fim; await new Promise((r) => setTimeout(r, 100))) if (await caixa.isChecked()) return;
   throw new Error('A caixa não ficou marcada');
 }
+/** Abre o documento no visualizador, espera as páginas serem desenhadas, fotografa e fecha. */
+async function visualizar(pagina, rotulo, captura, minimoPaginas = 1) {
+  await pagina.getByRole('button', { name: rotulo }).click();
+  const paginas = pagina.locator('.visualizador canvas.visualizador-pagina');
+  await paginas.nth(minimoPaginas - 1).waitFor();
+  await pagina.getByText('Abrindo o documento…').waitFor({ state: 'detached' });
+  const n = await paginas.count();
+  // O desenho é assíncrono: confere que a página não ficou em branco.
+  const pintada = await paginas.first().evaluate((c) => {
+    const d = c.getContext('2d').getImageData(0, 0, c.width, Math.min(c.height, 400)).data;
+    for (let i = 0; i < d.length; i += 4) if (d[i] < 200) return true;
+    return false;
+  });
+  if (!pintada) throw new Error(`${rotulo}: página em branco`);
+  await pagina.screenshot({ path: join(SAIDA, captura) });
+  await pagina.getByRole('button', { name: 'Fechar' }).click();
+  await pagina.locator('.visualizador').waitFor({ state: 'detached' });
+  return n;
+}
 async function baixar(pagina, clicar, nome) {
   const [download] = await Promise.all([pagina.waitForEvent('download'), clicar()]);
   const caminho = join(SAIDA, nome ?? download.suggestedFilename());
@@ -202,6 +221,23 @@ const paginas = [];
   await g.getByText('Saldo: 3 un').waitFor();
   const pecaId = g.url().split('/').pop();
 
+  log('Tabela de serviços: sugestões, serviço próprio com preço e preço da hora técnica');
+  await g.goto(`${APP}/interno/servicos`);
+  await g.getByRole('button', { name: 'Incluir serviços sugeridos' }).click();
+  await g.getByText('9 serviço(s) incluído(s)', { exact: false }).waitFor();
+  await g.getByRole('link', { name: 'Novo' }).click();
+  await g.getByLabel('Descrição', { exact: true }).fill('Troca de guarnição e ciclo de teste');
+  await g.getByLabel('Unidade').fill('serviço');
+  await g.getByLabel('Preço', { exact: true }).fill('180,00');
+  await g.getByRole('button', { name: 'Salvar serviço' }).click();
+  await g.waitForURL(`${APP}/interno/servicos`);
+  await g.getByRole('link', { name: /Hora técnica/ }).click();
+  await g.getByLabel('Preço', { exact: true }).fill('150,00');
+  await g.getByRole('button', { name: 'Salvar serviço' }).click();
+  await g.waitForURL(`${APP}/interno/servicos`);
+  await g.getByText('R$ 150,00 por hora', { exact: false }).waitFor();
+  await g.screenshot({ path: join(SAIDA, '02b-servicos.png'), fullPage: true });
+
   // ---------- Cliente no celular ----------
   const ctxC = await navegador.newContext({ ...devices['Pixel 7'], ...BR });
   const c = await ctxC.newPage();
@@ -222,21 +258,24 @@ const paginas = [];
   await g.getByRole('link', { name: 'Fazer orçamento' }).click();
   await g.waitForURL(/\/interno\/orcamentos\/novo\?chamado=2/);
   await g.getByLabel('Equipamento', { exact: true }).locator('option:checked').filter({ hasText: 'Autoclave' }).waitFor({ state: 'attached' });
-  // O orçamento já abre com a linha de mão de obra; uma linha extra deixada em branco não deve ir para o documento.
-  const item = g.locator('.item-valor').first();
-  await item.getByLabel('Descrição do item').fill('Mão de obra: troca da guarnição e ciclo de teste');
-  await item.getByLabel('Valor unitário').fill('180,00');
-  await g.getByRole('button', { name: 'Serviço', exact: true }).click();
+  // Serviço da tabela (com preço), peça do estoque e uma linha avulsa deixada em branco (não deve ir para o documento).
+  const seletorServico = g.getByLabel('Adicionar serviço cadastrado');
+  await seletorServico.selectOption(await seletorServico.locator('option', { hasText: 'Troca de guarnição' }).getAttribute('value'));
   await g.getByLabel('Adicionar peça do estoque').selectOption({ index: 1 });
-  await g.locator('.item-valor').nth(2).getByText('cód. GU-21').waitFor();
+  await g.locator('.item-valor').nth(1).getByText('cód. GU-21').waitFor();
+  await g.getByRole('button', { name: 'Serviço avulso' }).click();
+  await g.locator('.item-valor').nth(2).waitFor();
   confere((await g.getByLabel('Garantia', { exact: true }).inputValue()).startsWith('90 dias'), 'Garantia padrão não veio da configuração');
   await g.screenshot({ path: join(SAIDA, '03-orcamento-editar.png'), fullPage: true });
   await g.getByRole('button', { name: /Salvar orçamento \(R\$\s300,00\)/ }).click();
   await g.waitForURL(`${APP}/interno/orcamentos/1`);
-  confere((await esperarDoc('orcamentos/1', (d) => d.itens?.length > 0)).itens.length === 2, 'A linha em branco não deveria ser salva');
+  const orcSalvo = await esperarDoc('orcamentos/1', (d) => d.itens?.length > 0);
+  confere(orcSalvo.itens.length === 2, 'A linha em branco não deveria ser salva');
+  confere(!!orcSalvo.itens[0].servicoId && orcSalvo.itens[0].valorUnitario === 180, 'Serviço da tabela sem vínculo ou preço');
   await g.getByRole('button', { name: 'Enviar ao cliente (portal)' }).click();
   await g.getByText(/Orçamento enviado/).waitFor();
-  const pdfOrcamento = await baixar(g, () => g.getByRole('button', { name: 'PDF do orçamento' }).click(), 'orcamento-1.pdf');
+  const pdfOrcamento = await baixar(g, () => g.getByRole('button', { name: 'Enviar orçamento (PDF)' }).click(), 'orcamento-1.pdf');
+  await visualizar(g, 'Visualizar orçamento', '03b-visualizar-orcamento.png');
   const chamado2 = await esperarDoc('chamados/2', (d) => d.status === 'aguardando');
   confere(chamado2.status === 'aguardando', `Chamado deveria aguardar aprovação: ${chamado2.status}`);
 
@@ -247,6 +286,7 @@ const paginas = [];
   await c.getByRole('link', { name: 'Ver agora' }).click();
   await c.waitForURL(`${APP}/portal/orcamentos/1`);
   await c.screenshot({ path: join(SAIDA, '05-portal-orcamento.png'), fullPage: true });
+  await visualizar(c, 'Visualizar orçamento', '05b-portal-visualizar-orcamento.png');
   await c.getByRole('button', { name: /Aprovar orçamento/ }).click();
   await c.getByText(/Você aprovou este orçamento/).waitFor();
   const orc = await esperarDoc('orcamentos/1', (d) => d.status === 'aprovado');
@@ -291,10 +331,18 @@ const paginas = [];
   confere(await t.getByRole('checkbox', { name: /Analisador de segurança elétrica/ }).isDisabled(), 'Instrumento com certificado vencido deveria estar bloqueado');
   await marcar(t.getByRole('checkbox', { name: /Manutenção preventiva/ }));
   await marcar(t.getByRole('checkbox', { name: /Qualificação térmica/ }));
+  const servicoOS = t.getByLabel('Serviço cadastrado');
+  await servicoOS.selectOption(await servicoOS.locator('option', { hasText: 'Troca de guarnição' }).getAttribute('value'));
+  await t.getByLabel('Quantidade do serviço').fill('1');
+  await t.getByRole('button', { name: 'Incluir serviço' }).click();
+  await t.getByText('1 serviço × Troca de guarnição e ciclo de teste').waitFor();
+  await t.getByLabel('Descrição do serviço').fill('Limpeza do filtro de ar');
+  await t.getByRole('button', { name: 'Incluir serviço' }).click();
+  await t.getByText('1 × Limpeza do filtro de ar').waitFor();
   await t.getByLabel('Peça do estoque').selectOption({ index: 1 });
   await t.getByLabel('Quantidade', { exact: true }).fill('1');
-  await t.getByRole('button', { name: 'Incluir' }).click();
-  await t.getByText('Guarnição da porta 21 L').first().waitFor();
+  await t.getByRole('button', { name: 'Incluir peça' }).click();
+  await t.getByText('1 × Guarnição da porta 21 L').waitFor();
   await t.getByLabel('Diagnóstico (defeito encontrado)').fill('Guarnição ressecada com vazamento de vapor.');
   await t.getByLabel('Diagnóstico (defeito encontrado)').press('Tab');
   await t.getByLabel('Serviço executado').fill('Troca da guarnição, preventiva completa e qualificação térmica com 4 sondas.');
@@ -306,11 +354,14 @@ const paginas = [];
   await t.getByRole('button', { name: 'Concluir OS' }).click();
   await t.getByText('OS concluída', { exact: true }).waitFor();
   const laudo = await baixar(t, () => t.getByRole('button', { name: 'Gerar laudo e enviar' }).click(), 'laudo-os-2.pdf');
+  const paginasLaudo = await visualizar(t, 'Visualizar laudo', '06b-visualizar-laudo.png', 2);
+  console.log(`     laudo com ${paginasLaudo} página(s) no visualizador`);
 
   log('Conferir no banco: baixa do estoque, movimento da OS, instrumento no laudo e vencimentos');
   const os2 = await esperarDoc('os/2', (d) => d.status === 'concluida');
   confere(os2.status === 'concluida' && os2.estoqueBaixado === true, 'OS sem baixa de estoque');
   confere(os2.instrumentosUsados.length === 1 && os2.instrumentosUsados[0].certificado === 'RBC 4521/26', 'Instrumento não registrado na OS');
+  confere(os2.servicos?.length === 2 && !!os2.servicos[0].servicoId && !os2.servicos[1].servicoId, `Serviços da OS: ${JSON.stringify(os2.servicos)}`);
   // A baixa roda logo depois da conclusão: espera o saldo chegar a 2.
   const peca = await esperarDoc(`pecas/${pecaId}`, (d) => d.quantidade === 2);
   confere(peca.quantidade === 2, `Saldo da peça deveria ser 2: ${peca.quantidade}`);
@@ -332,7 +383,16 @@ const paginas = [];
   const fat = conferePix(await g.getByLabel('Código Pix copia e cola').inputValue(), { valor: 300, txid: 'FAT1', chave: '12345678000190' });
   confere(fat['59'] === 'Odonto Hospitalar' && fat['60'] === 'Sao Paulo', 'Pix: recebedor incorreto');
   await g.screenshot({ path: join(SAIDA, '07-fatura-pix.png'), fullPage: true });
-  const pdfFatura = await baixar(g, () => g.getByRole('button', { name: 'PDF da fatura' }).click(), 'fatura-1.pdf');
+  const pdfFatura = await baixar(g, () => g.getByRole('button', { name: 'Enviar fatura (PDF)' }).click(), 'fatura-1.pdf');
+  await visualizar(g, 'Visualizar fatura', '07b-visualizar-fatura.png');
+
+  log('Chamado em PDF e atalhos da OS para o orçamento e a fatura');
+  await g.goto(`${APP}/interno/chamados/2`);
+  await visualizar(g, 'Visualizar chamado', '07c-visualizar-chamado.png');
+  await g.goto(`${APP}/interno/os/2`);
+  await g.locator('.info', { hasText: 'Orçamento' }).getByRole('link', { name: 'nº 1' }).waitFor();
+  await g.locator('.info', { hasText: 'Fatura' }).getByRole('link', { name: 'nº 1' }).click();
+  await g.waitForURL(`${APP}/interno/faturas/1`);
 
   log('Cliente vê a fatura em aberto com o Pix no portal');
   await c.goto(`${APP}/portal/financeiro`);
@@ -426,7 +486,7 @@ const paginas = [];
   const backup = JSON.parse(readFileSync(arquivoBackup, 'utf8'));
   const esperado = {
     usuarios: 2, clientes: 1, tiposEquipamento: 11, equipamentos: 2, chamados: 2, os: 2, orcamentos: 1, faturas: 1,
-    instrumentos: 2, pecas: 1, 'pecas/movimentos': 2, config: 3, contadores: 4, 'chamados/fotos': 1, 'os/fotos': 1,
+    instrumentos: 2, pecas: 1, 'pecas/movimentos': 2, servicos: 10, config: 3, contadores: 4, 'chamados/fotos': 1, 'os/fotos': 1,
   };
   for (const [grupo, n] of Object.entries(esperado)) confere(backup.totais[grupo] === n, `Backup: ${grupo} = ${backup.totais[grupo]} (esperado ${n})`);
   confere(Object.keys(backup.documentos).length === Object.values(backup.totais).reduce((a, b) => a + b, 0), 'Backup: totais não batem com os documentos');
@@ -436,7 +496,13 @@ const paginas = [];
 
   log('Planilhas de OS e de equipamentos com vencimentos');
   const csvOS = linhasCSV(await baixar(g, () => g.getByRole('button', { name: 'Baixar planilha: Ordens de serviço' }).click()));
-  confere(csvOS.length === 3 && csvOS[2].includes('Termômetro digital com 4 sondas Testo 735-2 nº TD-77') && csvOS[2].includes('1 × Guarnição da porta 21 L'), `CSV de OS: ${csvOS[2]}`);
+  confere(
+    csvOS.length === 3 &&
+      csvOS[2].includes('Termômetro digital com 4 sondas Testo 735-2 nº TD-77') &&
+      csvOS[2].includes('1 serviço × Troca de guarnição e ciclo de teste, 1 × Limpeza do filtro de ar') &&
+      csvOS[2].includes('1 × Guarnição da porta 21 L'),
+    `CSV de OS: ${csvOS[2]}`,
+  );
   const csvEq = linhasCSV(await baixar(g, () => g.getByRole('button', { name: 'Baixar planilha: Equipamentos e vencimentos' }).click()));
   confere(csvEq.length === 3 && csvEq.some((l) => l.includes('Monitor multiparamétrico') && l.includes(';Vencido;')), `CSV de equipamentos: ${csvEq.join(' | ')}`);
   const csvEst = linhasCSV(await baixar(g, () => g.getByRole('button', { name: 'Baixar planilha: Estoque' }).click()));
@@ -449,7 +515,7 @@ const paginas = [];
   confere(seco.includes('Nada foi gravado') && !(await listar('clientes', 'demo-restaurado')).length, 'A conferência não deveria gravar nada');
   const gravado = execFileSync(process.execPath, [ferramenta, arquivoBackup, '--projeto', 'demo-restaurado', '--gravar'], { env, encoding: 'utf8' });
   console.log(`     ${gravado.trim().split('\n').pop()}`);
-  for (const col of ['clientes', 'equipamentos', 'chamados', 'os', 'orcamentos', 'faturas', 'instrumentos', 'pecas', 'usuarios']) {
+  for (const col of ['clientes', 'equipamentos', 'chamados', 'os', 'orcamentos', 'faturas', 'instrumentos', 'pecas', 'servicos', 'usuarios']) {
     const n = (await listar(col, 'demo-restaurado')).length;
     confere(n === backup.totais[col], `Restauração: ${col} = ${n} (esperado ${backup.totais[col]})`);
   }
