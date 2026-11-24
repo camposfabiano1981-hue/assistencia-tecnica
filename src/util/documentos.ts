@@ -1,7 +1,11 @@
 // PDFs de orçamento e fatura (carregados só quando usados).
 import QRCode from 'qrcode';
 import type { Chamado, Cliente, Empresa, Fatura, Foto, ItemValor, Orcamento } from '../tipos';
-import { fmtData, fmtDataHora, fmtMoeda, fmtTelefone, rotuloOrigem, rotuloStatusChamado } from './formato';
+import type { DadosVisa } from '../dados/visa';
+import { situacaoDoEquipamento } from '../dados/visa';
+import { rotuloSituacao, situacao } from '../dados/vencimentos';
+import { fmtData, fmtDataHora, fmtMoeda, fmtTelefone, numeroOS, rotuloCriticidade, rotuloOrigem, rotuloStatusChamado, rotuloTipoOS } from './formato';
+import { formatarCodigo } from './verificacao';
 import { COR, Folha, txt } from './pdfBase';
 import { rotuloFormaPagamento } from '../dados/financeiro';
 
@@ -180,4 +184,115 @@ export function gerarChamadoPDF(c: Chamado, empresa: Empresa | null, cliente: Cl
   f.galeria(`Fotos enviadas (${fotos.length})`, fotos);
   f.rodape(undefined, `Chamado nº ${c.numero}`);
   return f.arquivo(`chamado-${c.numero}.pdf`);
+}
+
+/**
+ * Pasta da Vigilância Sanitária: inventário, plano de manutenção (exigências e vencimentos),
+ * histórico de atendimentos com o código de autenticidade de cada laudo e documentos do prestador.
+ */
+export function gerarDossieVisaPDF(d: DadosVisa, empresa: Empresa | null): File {
+  const f = new Folha();
+  const hoje = new Date();
+  f.cabecalho(empresa, ['PASTA DA VIGILÂNCIA SANITÁRIA', 'Registro de manutenção'], hoje.toLocaleDateString('pt-BR'), `${d.equipamentos.length} equipamento(s)`);
+
+  f.secao('Estabelecimento');
+  f.pares([
+    ['Nome', d.cliente.nome],
+    ['CNPJ/CPF', d.cliente.documento],
+    ['Endereço', [d.cliente.endereco, d.cliente.cidade].filter(Boolean).join(' - ')],
+    ['Contato', d.cliente.contato],
+  ]);
+
+  f.secao('Prestador do serviço de manutenção');
+  f.pares([
+    ['Empresa', empresa?.nome],
+    ['CNPJ/CPF', empresa?.documento],
+    ['Responsável técnico', [empresa?.rtNome, empresa?.rtRegistro].filter(Boolean).join(' - ')],
+    ['Contato', [empresa?.whatsapp && fmtTelefone(empresa.whatsapp), empresa?.email].filter(Boolean).join(' · ')],
+  ]);
+  const docs = empresa?.documentos ?? [];
+  if (docs.length) {
+    f.tabela({
+      head: [['Documento do prestador', 'Número', 'Validade', 'Situação']],
+      body: docs.map((x) => [
+        txt(x.nome),
+        txt(x.numero ?? ''),
+        x.validade ? fmtData(x.validade) : '-',
+        x.validade ? rotuloSituacao[situacao(x.validade)] : 'Sem validade',
+      ]),
+      columnStyles: { 1: { cellWidth: 40 }, 2: { cellWidth: 24 }, 3: { cellWidth: 28 } },
+    });
+  }
+
+  f.secao('Inventário de equipamentos');
+  if (!d.equipamentos.length) f.paragrafo('Equipamentos', 'Nenhum equipamento cadastrado.');
+  else
+    f.tabela({
+      head: [['Equipamento', 'Série / patrimônio', 'Setor', 'Criticidade', 'Última manutenção', 'Situação']],
+      body: d.equipamentos.map((e) => [
+        txt([e.tipoNome, e.fabricante, e.modelo].filter(Boolean).join(' ')),
+        txt([e.numeroSerie, e.patrimonio && `pat. ${e.patrimonio}`].filter(Boolean).join(' / ') || '-'),
+        txt(e.setor ?? '-'),
+        txt(rotuloCriticidade[e.criticidade]?.split(' (')[0] ?? '-'),
+        e.ultimaVisitaEm ? `${fmtData(e.ultimaVisitaEm)}${e.ultimaOS ? ` (OS ${numeroOS(e.ultimaOS)})` : ''}` : '-',
+        rotuloSituacao[situacaoDoEquipamento(e)],
+      ]),
+      columnStyles: { 3: { cellWidth: 20 }, 4: { cellWidth: 30 }, 5: { cellWidth: 24 } },
+    });
+
+  const plano = d.equipamentos.flatMap((e) =>
+    Object.values(e.vencimentos ?? {}).map((v) => [
+      txt([e.tipoNome, e.numeroSerie && `(${e.numeroSerie})`].filter(Boolean).join(' ')),
+      txt(v.descricao),
+      v.periodicidadeMeses ? `${v.periodicidadeMeses} meses` : '-',
+      v.ultimo ? fmtData(v.ultimo) : '-',
+      v.proximo ? fmtData(v.proximo) : '-',
+      rotuloSituacao[situacao(v.proximo)],
+    ]),
+  );
+  if (plano.length) {
+    f.secao('Plano de manutenção e exigências periódicas');
+    f.tabela({
+      head: [['Equipamento', 'Exigência', 'Periodicidade', 'Último', 'Próximo', 'Situação']],
+      body: plano,
+      columnStyles: { 2: { cellWidth: 22 }, 3: { cellWidth: 20 }, 4: { cellWidth: 20 }, 5: { cellWidth: 24 } },
+    });
+  }
+
+  const limite = new Date(hoje);
+  limite.setMonth(limite.getMonth() - 24);
+  const historico = d.ordens.filter((o) => (o.fimEm?.toMillis() ?? 0) >= limite.getTime());
+  f.secao('Histórico de atendimentos (últimos 24 meses)');
+  if (!historico.length) f.paragrafo('Atendimentos', 'Nenhum atendimento concluído no período.');
+  else
+    f.tabela({
+      head: [['OS', 'Data', 'Equipamento', 'Tipo', 'Resultado', 'Código do laudo']],
+      body: historico.map((o) => [
+        numeroOS(o.numero),
+        fmtData(o.fimEm),
+        txt([o.equipamento.tipoNome, o.equipamento.numeroSerie && `(${o.equipamento.numeroSerie})`].filter(Boolean).join(' ')),
+        txt(rotuloTipoOS[o.tipo] ?? o.tipo),
+        o.liberado ? 'Liberado' : o.liberado === false ? 'Não liberado' : '-',
+        o.codigoVerificacao ? formatarCodigo(o.codigoVerificacao) : '-',
+      ]),
+      columnStyles: { 0: { cellWidth: 14 }, 1: { cellWidth: 20 }, 4: { cellWidth: 22 }, 5: { cellWidth: 40 } },
+    });
+
+  const instrumentos = new Map<string, string[]>();
+  for (const o of historico)
+    for (const i of o.instrumentosUsados ?? [])
+      instrumentos.set(i.id, [txt(i.descricao), txt(i.numeroSerie ?? '-'), txt(i.certificado ?? '-'), txt(i.laboratorio ?? '-'), i.validade ? fmtData(i.validade) : '-']);
+  if (instrumentos.size) {
+    f.secao('Instrumentos de medição utilizados (rastreabilidade RBC)');
+    f.tabela({ head: [['Instrumento', 'Nº de série', 'Certificado', 'Laboratório', 'Validade']], body: [...instrumentos.values()] });
+  }
+
+  if (historico.some((o) => o.codigoVerificacao)) {
+    f.paragrafo(
+      'Autenticidade',
+      `Cada laudo pode ser conferido em ${typeof location !== 'undefined' ? location.host : ''}/v, informando o código da tabela acima (ou lendo o QR code impresso no laudo).`,
+    );
+  }
+  f.rodape(undefined, `Pasta da VISA - ${d.cliente.nome}`);
+  return f.arquivo(`pasta-visa-${d.cliente.nome.normalize('NFD').replace(/[^\w]+/g, '-').toLowerCase().slice(0, 40)}.pdf`);
 }

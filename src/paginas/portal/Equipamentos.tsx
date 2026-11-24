@@ -27,7 +27,15 @@ export function MeusEquipamentos() {
 
   return (
     <>
-      <CabecalhoPagina titulo="Meus equipamentos" subtitulo="Histórico de atendimentos e laudos" />
+      <CabecalhoPagina
+        titulo="Meus equipamentos"
+        subtitulo="Histórico de atendimentos e laudos"
+        acoes={
+          <LinkBotao para="/portal/visa" variante="secundario" icone="lista">
+            Pasta da VISA
+          </LinkBotao>
+        }
+      />
       {(equipamentos.erro || laudos.erro) && <Aviso tom="erro">{mensagemErro(equipamentos.erro ?? laudos.erro)}</Aviso>}
       {!ativos.length ? (
         <Vazio icone="caixa" titulo="Nenhum equipamento cadastrado">

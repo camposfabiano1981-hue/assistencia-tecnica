@@ -41,6 +41,17 @@ export interface Empresa {
   orcGarantia?: string;
   orcCondicoes?: string;
   orcValidadeDias?: number;
+  // Fase 3: documentos da empresa mostrados na Pasta da VISA
+  documentos?: DocumentoEmpresa[];
+}
+
+/** Documento da empresa para a fiscalização (alvará, registro do RT…): o arquivo fica num link (ex.: Google Drive). */
+export interface DocumentoEmpresa {
+  id: string;
+  nome: string;
+  numero?: string;
+  validade?: Timestamp | null;
+  link?: string;
 }
 
 /** config/publico — o mínimo legível sem login (página do QR). */

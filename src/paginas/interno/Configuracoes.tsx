@@ -1,12 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Bytes, collection, doc, query, setDoc, where, writeBatch } from 'firebase/firestore';
+import { Bytes, Timestamp, collection, doc, query, setDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useSessao } from '../../sessao';
 import { mensagemErro, useConsulta } from '../../dados/hooks';
 import { avisarNovoChamado, criarAcesso, definirAtivo, reenviarConvite } from '../../dados/operacoes';
 import { prepararLogo } from '../../util/imagem';
 import { soDigitos } from '../../util/formato';
-import type { Empresa, Usuario } from '../../tipos';
+import type { DocumentoEmpresa, Empresa, Usuario } from '../../tipos';
+import { deInputData, paraInputData } from '../../util/datas';
+import { Icone } from '../../componentes/Icone';
 import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, Selecao, Selo, useUrlImagem } from '../../componentes/ui';
 import { CartaoPix } from '../../componentes/Valores';
 import { pixDaCobranca } from '../../dados/financeiro';
@@ -37,6 +39,7 @@ export function Configuracoes() {
       <CabecalhoPagina titulo="Configurações" voltar="/interno/mais" />
       <DadosEmpresa empresa={empresa} />
       <PixEOrcamento empresa={empresa} />
+      <DocumentosEmpresa empresa={empresa} />
       <AvisoEmail empresa={empresa} />
       <Equipe />
     </>
@@ -334,5 +337,86 @@ function PixEOrcamento({ empresa }: { empresa: Empresa }) {
           ))}
       </Cartao>
     </form>
+  );
+}
+
+type LinhaDocumento = { id: string; nome: string; numero: string; validade: string; link: string };
+
+/** Documentos que aparecem na Pasta da VISA dos clientes (o arquivo fica num link, ex.: Google Drive). */
+function DocumentosEmpresa({ empresa }: { empresa: Empresa }) {
+  const [linhas, setLinhas] = useState<LinhaDocumento[]>(() =>
+    (empresa.documentos ?? []).map((d) => ({
+      id: d.id,
+      nome: d.nome,
+      numero: d.numero ?? '',
+      validade: paraInputData(d.validade?.toDate() ?? null),
+      link: d.link ?? '',
+    })),
+  );
+  const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso'; texto: string } | null>(null);
+  const muda = (i: number, k: keyof LinhaDocumento, v: string) => setLinhas(linhas.map((l, j) => (j === i ? { ...l, [k]: v } : l)));
+
+  async function salvar() {
+    setMsg(null);
+    const validas = linhas.filter((l) => l.nome.trim());
+    if (validas.some((l) => l.link.trim() && !/^https:\/\//i.test(l.link.trim()))) {
+      return setMsg({ tom: 'erro', texto: 'O link precisa começar com https:// (ex.: link de compartilhamento do Google Drive).' });
+    }
+    const documentos: DocumentoEmpresa[] = validas.map((l) => {
+      const validade = deInputData(l.validade);
+      return {
+        id: l.id,
+        nome: l.nome.trim().slice(0, 120),
+        ...(l.numero.trim() ? { numero: l.numero.trim().slice(0, 60) } : {}),
+        validade: validade ? Timestamp.fromDate(validade) : null,
+        ...(l.link.trim() ? { link: l.link.trim() } : {}),
+      };
+    });
+    try {
+      await setDoc(doc(db, 'config', 'empresa'), { documentos }, { merge: true });
+      setLinhas(validas);
+      setMsg({ tom: 'sucesso', texto: 'Documentos salvos. Eles já aparecem na Pasta da VISA dos clientes.' });
+    } catch (e) {
+      setMsg({ tom: 'erro', texto: mensagemErro(e) });
+    }
+  }
+
+  return (
+    <Cartao titulo="Documentos para a Pasta da VISA">
+      <p className="pequeno" style={{ marginTop: 0 }}>
+        Aparecem para os clientes no portal e no dossiê em PDF. Ex.: cartão CNPJ, alvará de funcionamento, registro do responsável técnico
+        (CFT/CREA). Guarde o arquivo no Google Drive e cole aqui o link de compartilhamento.
+      </p>
+      {msg && <Aviso tom={msg.tom}>{msg.texto}</Aviso>}
+      {linhas.map((l, i) => (
+        <div key={l.id} className="item-valor">
+          <div className="item-valor-topo">
+            <span className="pequeno">Documento {i + 1}</span>
+            <button type="button" className="icone-botao" aria-label="Remover documento" onClick={() => setLinhas(linhas.filter((_, j) => j !== i))}>
+              <Icone nome="lixo" tamanho={18} />
+            </button>
+          </div>
+          <div className="grade grade-2">
+            <Campo rotulo="Nome do documento" value={l.nome} onChange={(e) => muda(i, 'nome', e.target.value)} placeholder="Ex.: Alvará de funcionamento" />
+            <Campo rotulo="Número" value={l.numero} onChange={(e) => muda(i, 'numero', e.target.value)} />
+            <Campo rotulo="Validade" type="date" value={l.validade} onChange={(e) => muda(i, 'validade', e.target.value)} />
+            <Campo rotulo="Link do arquivo" type="url" value={l.link} onChange={(e) => muda(i, 'link', e.target.value)} placeholder="https://drive.google.com/…" />
+          </div>
+        </div>
+      ))}
+      <div className="acoes">
+        <Botao
+          type="button"
+          variante="secundario"
+          icone="mais_circulo"
+          onClick={() => setLinhas([...linhas, { id: crypto.randomUUID().slice(0, 8), nome: '', numero: '', validade: '', link: '' }])}
+        >
+          Documento
+        </Botao>
+        <Botao type="button" onClick={() => void salvar()}>
+          Salvar documentos
+        </Botao>
+      </div>
+    </Cartao>
   );
 }

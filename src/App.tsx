@@ -11,6 +11,7 @@ import { MeusEquipamentos } from './paginas/portal/Equipamentos';
 import { ContaCliente } from './paginas/portal/Conta';
 import { FinanceiroCliente, OrcamentoCliente, FaturaCliente } from './paginas/portal/Financeiro';
 import { AvaliarOS } from './paginas/portal/Avaliar';
+import { PastaVisa } from './paginas/portal/Visa';
 import { Financeiro, OrcamentoEditar, OrcamentoDetalhe, FaturaNova, FaturaDetalhe } from './paginas/interno/Financeiro';
 import { Vencimentos, ListaInstrumentos, InstrumentoEditar, ListaEstoque, PecaDetalhe } from './paginas/interno/Controle';
 import { Painel } from './paginas/interno/Painel';
@@ -49,6 +50,7 @@ export function App() {
               <Route path="orcamentos/:id" element={<OrcamentoCliente />} />
               <Route path="faturas/:id" element={<FaturaCliente />} />
               <Route path="avaliar/:osId" element={<AvaliarOS />} />
+              <Route path="visa" element={<PastaVisa />} />
             </Route>
           </Route>
 
