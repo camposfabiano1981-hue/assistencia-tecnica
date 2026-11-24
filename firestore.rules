@@ -265,6 +265,20 @@ service cloud.firestore {
       }
     }
 
+    // ================= Fase 3 =================
+
+    // ---------- Autenticidade dos laudos ----------
+    // Qualquer pessoa confere um laudo pelo código impresso nele, mas ninguém lista os códigos.
+    // O registro nasce junto com a conclusão da OS (mesmo lote) e não muda depois.
+    match /verificacoes/{codigo} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if equipe() && codigo.size() == 16
+        && dados().osId is string
+        && getAfter(/databases/$(database)/documents/os/$(dados().osId)).data.codigoVerificacao == codigo;
+      allow update, delete: if false;
+    }
+
     // ---------- Catálogo de serviços (tabela de preços): só a equipe ----------
     match /servicos/{id} {
       allow read: if equipe();

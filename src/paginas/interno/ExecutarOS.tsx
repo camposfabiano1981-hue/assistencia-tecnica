@@ -17,6 +17,7 @@ import { GaleriaFotos } from '../../componentes/Fotos';
 import { Icone } from '../../componentes/Icone';
 import { BotaoLaudo } from '../../componentes/Laudo';
 import { BotaoVisualizarLaudo } from '../../componentes/Documentos';
+import { formatarCodigo } from '../../util/verificacao';
 import { rotuloStatusOrcamento } from '../../dados/financeiro';
 import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, IndicadorSincronia, Info, LinkBotao, Selo, Vazio } from '../../componentes/ui';
 
@@ -469,7 +470,7 @@ function Pecas({ os, editavel }: { os: OrdemServico; editavel: boolean }) {
 }
 
 function Conclusao({ os }: { os: OrdemServico }) {
-  const { perfil } = useSessao();
+  const { perfil, empresa } = useSessao();
   const pad = useRef<AssinaturaRef>(null);
   const [nome, setNome] = useState('');
   const [documento, setDocumento] = useState('');
@@ -487,7 +488,7 @@ function Conclusao({ os }: { os: OrdemServico }) {
     setEnviando(true);
     try {
       const png = await pad.current!.png();
-      const envio = concluirOS(os, { nome, documento, png }, os.liberado, perfil?.nome ?? 'Técnico');
+      const envio = concluirOS(os, { nome, documento, png }, os.liberado, perfil?.nome ?? 'Técnico', empresa);
       envio.catch((e) => setErro(`O servidor recusou a conclusão: ${mensagemErro(e)}`));
       // Com internet, espera a confirmação; sem internet, fica salvo no aparelho e sincroniza depois.
       if (navigator.onLine) await envio;
@@ -534,6 +535,14 @@ function Concluida({ os, zap }: { os: OrdemServico; zap?: string }) {
         Assinada por <strong>{os.assinatura?.nome}</strong> em {fmtDataHora(os.assinatura?.em)}.{' '}
         {os.liberado ? 'Equipamento liberado para uso.' : <strong style={{ color: 'var(--perigo)' }}>Equipamento NÃO liberado para uso.</strong>}
       </p>
+      {os.codigoVerificacao && (
+        <p className="pequeno">
+          Código de autenticidade do laudo:{' '}
+          <a href={`/v/${os.codigoVerificacao}`} target="_blank" rel="noreferrer">
+            {formatarCodigo(os.codigoVerificacao)}
+          </a>
+        </p>
+      )}
       <div className="acoes-coluna">
         <BotaoVisualizarLaudo os={os} rotulo="Visualizar laudo" bloco />
         <BotaoLaudo os={os} rotulo="Gerar laudo e enviar" bloco />

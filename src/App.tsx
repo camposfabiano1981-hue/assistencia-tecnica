@@ -4,6 +4,7 @@ import { ExigePapel, Inicio, LayoutInterno, LayoutPortal } from './componentes/L
 import { Login } from './paginas/Login';
 import { Instalar } from './paginas/Instalar';
 import { QrEquipamento } from './paginas/Qr';
+import { Verificar } from './paginas/Verificar';
 import { MeusChamados, ChamadoCliente } from './paginas/portal/Chamados';
 import { NovoChamadoPortal } from './paginas/portal/NovoChamado';
 import { MeusEquipamentos } from './paginas/portal/Equipamentos';
@@ -33,6 +34,8 @@ export function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/instalar" element={<Instalar />} />
           <Route path="/q/:id" element={<QrEquipamento />} />
+          <Route path="/v" element={<Verificar />} />
+          <Route path="/v/:codigo" element={<Verificar />} />
 
           <Route element={<ExigePapel papeis={['cliente']} />}>
             <Route path="/portal" element={<LayoutPortal />}>

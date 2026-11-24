@@ -408,3 +408,43 @@ describe('faturas, instrumentos e estoque (Fase 2)', () => {
     await assertSucceeds(deleteDoc(doc(fs('gestor'), 'servicos/s1')));
   });
 });
+
+describe('autenticidade dos laudos (Fase 3)', () => {
+  const CODIGO = 'K7Q2MX9PABCD2345';
+  const registro = (osId = '1') => ({ tipo: 'laudo', osId, osNumero: 1, clienteNome: 'Clínica', tecnicoNome: 'Técnico', liberado: true });
+  const concluir = (db: Firestore, codigo = CODIGO, osId = '1') => {
+    const lote = writeBatch(db);
+    lote.set(doc(db, `verificacoes/${codigo}`), registro(osId));
+    lote.update(doc(db, `os/${osId}`), {
+      codigoVerificacao: codigo,
+      status: 'concluida',
+      liberado: true,
+      assinatura: { nome: 'Dra. Ana', imagem: Bytes.fromUint8Array(new Uint8Array(2000)), em: Timestamp.now() },
+    });
+    return lote.commit();
+  };
+
+  it('nasce junto com a conclusão da OS e qualquer pessoa confere pelo código', async () => {
+    await semear();
+    await criarOS(fs('tec'));
+    await assertFails(concluir(fs('cli1')));
+    await assertSucceeds(concluir(fs('tec')));
+    const anon = env.unauthenticatedContext().firestore() as unknown as Firestore;
+    await assertSucceeds(getDoc(doc(anon, `verificacoes/${CODIGO}`)));
+    await assertSucceeds(getDoc(doc(anon, 'verificacoes/NAOEXISTE2345678')));
+    await assertFails(getDocs(collection(anon, 'verificacoes')));
+    await assertFails(getDocs(collection(fs('tec'), 'verificacoes')));
+  });
+
+  it('não se forja nem se altera', async () => {
+    await semear();
+    await criarOS(fs('tec'));
+    // Sem a OS com o mesmo código no lote: recusado.
+    await assertFails(setDoc(doc(fs('tec'), `verificacoes/${CODIGO}`), registro()));
+    // Código fora do tamanho: recusado.
+    await assertFails(concluir(fs('tec'), 'CURTO'));
+    await assertSucceeds(concluir(fs('tec')));
+    await assertFails(updateDoc(doc(fs('gestor'), `verificacoes/${CODIGO}`), { liberado: false }));
+    await assertFails(deleteDoc(doc(fs('gestor'), `verificacoes/${CODIGO}`)));
+  });
+});

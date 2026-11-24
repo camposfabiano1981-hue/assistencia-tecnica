@@ -3,7 +3,9 @@ import type { Empresa, Foto, OrdemServico, ResultadoItem } from '../tipos';
 import { fmtData, fmtDataHora, fmtTelefone, numeroOS, rotuloTipoOS } from './formato';
 import { avaliarMedicao, ordenados } from './medicao';
 import { somarMeses } from './datas';
+import QRCode from 'qrcode';
 import { COR, Folha, txt } from './pdfBase';
+import { formatarCodigo, urlVerificacao } from './verificacao';
 
 export { txt };
 
@@ -188,6 +190,28 @@ export async function gerarLaudo(os: OrdemServico, empresa: Empresa | null, foto
     pdf.text(txt(`Responsável técnico: ${empresa.rtNome}${empresa.rtRegistro ? ` - ${empresa.rtRegistro}` : ''}`), M + L / 2 + 4, yAss + 36);
   }
   pdf.setTextColor(0);
+
+  // ---- Autenticidade: QR e código para conferir em /v/CODIGO ----
+  if (os.codigoVerificacao) {
+    f.y = yAss + 42;
+    f.garantir(28);
+    const url = urlVerificacao(os.codigoVerificacao);
+    const qr = await QRCode.toDataURL(url, { margin: 0, width: 300, errorCorrectionLevel: 'M' });
+    pdf.addImage(qr, 'PNG', M, f.y, 22, 22);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(...COR.primaria);
+    pdf.text('Confira a autenticidade deste laudo', M + 26, f.y + 5);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8.2);
+    pdf.setTextColor(...COR.suave);
+    pdf.text(txt(`Leia o QR code ou acesse ${url.replace(/^https?:\/\//, '')}`), M + 26, f.y + 10.5, { maxWidth: L - 28 });
+    pdf.setTextColor(0);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`Código de verificação: ${formatarCodigo(os.codigoVerificacao)}`, M + 26, f.y + 16);
+    pdf.setFont('helvetica', 'normal');
+    f.y += 26;
+  }
 
   f.rodape(empresa?.rodapeLaudo, `OS nº ${numeroOS(os.numero)}`);
   return f.arquivo(`OS-${numeroOS(os.numero)}.pdf`);

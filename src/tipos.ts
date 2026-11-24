@@ -280,6 +280,23 @@ export interface OrdemServico {
   estoqueBaixado?: boolean;
   /** Serviços realizados (do catálogo ou avulsos). */
   servicos?: ServicoUsado[];
+  /** Fase 3: código impresso no laudo para conferir a autenticidade em /v/CODIGO. */
+  codigoVerificacao?: string;
+}
+
+/** Registro público de autenticidade de um laudo (verificacoes/{codigo}): só dados não sensíveis. */
+export interface Verificacao {
+  id: string;
+  tipo: 'laudo';
+  osId: string;
+  osNumero: number;
+  tipoOS: string;
+  empresa: { nome: string; documento?: string };
+  clienteNome: string;
+  equipamento: { tipoNome: string; fabricante?: string; modelo?: string; numeroSerie?: string };
+  tecnicoNome: string;
+  concluidaEm: Timestamp;
+  liberado: boolean | null;
 }
 
 /** chamados/{n}/fotos/{id} e os/{n}/fotos/{id} */
