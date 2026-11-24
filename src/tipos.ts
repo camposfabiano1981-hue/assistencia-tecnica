@@ -1,7 +1,7 @@
 // Modelo de dados (coleções do Firestore).
 import type { Bytes, Timestamp } from 'firebase/firestore';
 
-export type Papel = 'gestor' | 'tecnico' | 'cliente';
+export type Papel = 'gestor' | 'administrativo' | 'tecnico' | 'cliente';
 
 /** usuarios/{uid} — perfil de quem acessa o sistema. */
 export interface Usuario {
@@ -356,6 +356,10 @@ export interface Peca {
   custo: number;
   preco: number;
   ncm?: string;
+  /** Fabricante ou marca. */
+  fabricante?: string;
+  /** Equipamentos em que serve (ex.: "Autoclave Cristófoli 21 L"). */
+  aplicacao?: string;
   ativo: boolean;
 }
 

@@ -1,15 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Bytes, Timestamp, collection, doc, query, setDoc, where, writeBatch } from 'firebase/firestore';
+import { Bytes, Timestamp, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useSessao } from '../../sessao';
-import { mensagemErro, useConsulta } from '../../dados/hooks';
-import { avisarNovoChamado, criarAcesso, definirAtivo, reenviarConvite } from '../../dados/operacoes';
+import { mensagemErro } from '../../dados/hooks';
+import { avisarNovoChamado } from '../../dados/operacoes';
 import { prepararLogo } from '../../util/imagem';
 import { soDigitos } from '../../util/formato';
-import type { DocumentoEmpresa, Empresa, Usuario } from '../../tipos';
+import type { DocumentoEmpresa, Empresa } from '../../tipos';
 import { deInputData, paraInputData } from '../../util/datas';
 import { Icone } from '../../componentes/Icone';
-import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, Selecao, Selo, useUrlImagem } from '../../componentes/ui';
+import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, Selecao, useUrlImagem } from '../../componentes/ui';
 import { CartaoPix } from '../../componentes/Valores';
 import { pixDaCobranca } from '../../dados/financeiro';
 import type { TipoChavePix } from '../../util/pix';
@@ -28,7 +28,7 @@ export function Configuracoes() {
   if (perfil?.papel !== 'gestor') {
     return (
       <>
-        <CabecalhoPagina titulo="Configurações" voltar="/interno/mais" />
+        <CabecalhoPagina titulo="Configurações" />
         <Aviso tom="alerta">Somente o gestor altera as configurações.</Aviso>
       </>
     );
@@ -36,12 +36,11 @@ export function Configuracoes() {
   if (!empresa) return <Carregando />;
   return (
     <>
-      <CabecalhoPagina titulo="Configurações" voltar="/interno/mais" />
+      <CabecalhoPagina titulo="Configurações" subtitulo="A equipe e os níveis de acesso ficam em Administração → Equipe e acessos" />
       <DadosEmpresa empresa={empresa} />
       <PixEOrcamento empresa={empresa} />
       <DocumentosEmpresa empresa={empresa} />
       <AvisoEmail empresa={empresa} />
-      <Equipe />
     </>
   );
 }
@@ -175,76 +174,6 @@ function AvisoEmail({ empresa }: { empresa: Empresa }) {
           Enviar teste
         </Botao>
       </div>
-    </Cartao>
-  );
-}
-
-function Equipe() {
-  const { perfil } = useSessao();
-  const equipe = useConsulta<Usuario>(() => query(collection(db, 'usuarios'), where('papel', 'in', ['gestor', 'tecnico'])), []);
-  const [f, setF] = useState({ nome: '', email: '', registro: '', telefone: '' });
-  const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso'; texto: string } | null>(null);
-  const [enviando, setEnviando] = useState(false);
-
-  async function adicionar(e: FormEvent) {
-    e.preventDefault();
-    setMsg(null);
-    setEnviando(true);
-    try {
-      await criarAcesso({ nome: f.nome, email: f.email, papel: 'tecnico', registroProfissional: f.registro, telefone: f.telefone });
-      setMsg({ tom: 'sucesso', texto: `Técnico cadastrado. ${f.email} vai receber o e-mail para criar a senha.` });
-      setF({ nome: '', email: '', registro: '', telefone: '' });
-    } catch (err) {
-      setMsg({ tom: 'erro', texto: mensagemErro(err) });
-    } finally {
-      setEnviando(false);
-    }
-  }
-
-  return (
-    <Cartao titulo="Equipe">
-      {equipe.carregando ? (
-        <Carregando />
-      ) : (
-        <div className="lista" style={{ marginBottom: 14 }}>
-          {equipe.itens.map((u) => (
-            <div key={u.id} className="linha">
-              <div className="linha-texto">
-                <div className="linha-titulo">{u.nome}</div>
-                <div className="linha-detalhe">{[u.email, u.registroProfissional].filter(Boolean).join(' · ')}</div>
-              </div>
-              <div className="linha-lateral">
-                <Selo tom={u.papel === 'gestor' ? 'roxo' : 'info'}>{u.papel === 'gestor' ? 'Gestor' : 'Técnico'}</Selo>
-                {u.id !== perfil?.id && (
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button type="button" className="botao botao-fantasma" onClick={() => void reenviarConvite(u.email).then(() => setMsg({ tom: 'sucesso', texto: `E-mail reenviado para ${u.email}.` }))}>
-                      Reenviar e-mail
-                    </button>
-                    <button type="button" className="botao botao-fantasma" onClick={() => void definirAtivo(u, !u.ativo)}>
-                      {u.ativo ? 'Bloquear' : 'Liberar'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      {msg && <Aviso tom={msg.tom}>{msg.texto}</Aviso>}
-      <form onSubmit={adicionar}>
-        <div className="grade grade-2">
-          <Campo rotulo="Nome do técnico" required value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} />
-          <Campo rotulo="E-mail" type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-          <Campo rotulo="Registro (CFT/CREA)" value={f.registro} onChange={(e) => setF({ ...f, registro: e.target.value })} />
-          <Campo rotulo="Celular" inputMode="tel" value={f.telefone} onChange={(e) => setF({ ...f, telefone: e.target.value })} />
-        </div>
-        <Botao type="submit" variante="secundario" icone="usuario" carregando={enviando}>
-          Adicionar técnico
-        </Botao>
-      </form>
-      <p className="pequeno" style={{ marginTop: 12 }}>
-        Seu registro profissional aparece no laudo: preencha em "Registro do RT" acima se você mesmo atende.
-      </p>
     </Cartao>
   );
 }

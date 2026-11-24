@@ -3,13 +3,15 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Timestamp, collection, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { usePode } from '../../sessao';
 import { mensagemErro, useConsulta } from '../../dados/hooks';
 import { menorVencimento } from '../../dados/vencimentos';
 import type { Avaliacao, Chamado, Contrato, Equipamento, Fatura, OrdemServico } from '../../tipos';
 import { contratoDoEquipamento, prazoDoChamado } from '../../dados/contratos';
 import { fmtMoeda } from '../../util/formato';
 import { diasAte } from '../../util/datas';
-import { GraficoColunas, type PontoColuna } from '../../componentes/GraficoColunas';
+import { GraficoColunas } from '../../componentes/GraficoColunas';
+import { inicioDoMes, moedaEixo, serieMensal, ultimosMeses } from '../../dados/indicadores';
 import { Estrelas } from '../../componentes/Avaliacao';
 import { mediaNotas } from '../../dados/avaliacoes';
 import { Aviso, CabecalhoPagina, Carregando, Cartao, useOnline } from '../../componentes/ui';
@@ -32,12 +34,6 @@ function pct(n: number | null): string {
   return n == null ? '—' : `${Math.round(n * 100)}%`;
 }
 
-/** Eixo em reais: inteiro até 10 mil, compacto acima (R$ 10 mil). */
-function moedaEixo(n: number): string {
-  if (n >= 10000) return `R$ ${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
-  return `R$ ${n.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`;
-}
-
 function Kpi({ rotulo, valor, detalhe }: { rotulo: string; valor: string; detalhe?: string }) {
   return (
     <div className="kpi">
@@ -50,21 +46,17 @@ function Kpi({ rotulo, valor, detalhe }: { rotulo: string; valor: string; detalh
 
 export function Indicadores() {
   const [meses, setMeses] = useState<(typeof PERIODOS)[number]>(6);
-  const inicio = useMemo(() => {
-    const d = new Date();
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    d.setMonth(d.getMonth() - (meses - 1));
-    return d;
-  }, [meses]);
+  const inicio = useMemo(() => inicioDoMes(new Date(), meses - 1), [meses]);
   const desde = Timestamp.fromDate(inicio);
+  // Técnico: só os indicadores de atendimento (faturas e contratos ficam de fora).
+  const financeiro = usePode('financeiro');
   const chamados = useConsulta<Chamado>(() => query(collection(db, 'chamados'), where('abertoEm', '>=', desde)), [meses]);
   const ordens = useConsulta<OrdemServico>(() => query(collection(db, 'os'), where('fimEm', '>=', desde)), [meses]);
-  const faturas = useConsulta<Fatura>(() => query(collection(db, 'faturas'), where('emitidaEm', '>=', desde)), [meses]);
-  const pagas = useConsulta<Fatura>(() => query(collection(db, 'faturas'), where('status', '==', 'paga')), []);
+  const faturas = useConsulta<Fatura>(() => (financeiro ? query(collection(db, 'faturas'), where('emitidaEm', '>=', desde)) : null), [meses, financeiro]);
+  const pagas = useConsulta<Fatura>(() => (financeiro ? query(collection(db, 'faturas'), where('status', '==', 'paga')) : null), [financeiro]);
   const equip = useConsulta<Equipamento>(() => query(collection(db, 'equipamentos'), where('proximoVencimento', '!=', null)), []);
   const avaliacoes = useConsulta<Avaliacao>(() => query(collection(db, 'avaliacoes'), where('em', '>=', desde)), [meses]);
-  const contratos = useConsulta<Contrato>(() => query(collection(db, 'contratos')), []);
+  const contratos = useConsulta<Contrato>(() => (financeiro ? query(collection(db, 'contratos')) : null), [financeiro]);
 
   const online = useOnline();
   const consultas = [chamados, ordens, faturas, pagas, equip, avaliacoes, contratos];
@@ -74,25 +66,10 @@ export function Indicadores() {
   const atualizando = !carregando && consultas.some((c) => c.doCache);
 
   // Meses do período (o atual por último).
-  const mesesLista = Array.from({ length: meses }, (_, i) => {
-    const d = new Date(inicio);
-    d.setMonth(d.getMonth() + i);
-    return d;
-  });
-  const chaveMes = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
-  const rotular = (d: Date): Omit<PontoColuna, 'valor'> => ({
-    rotulo: `${d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}/${String(d.getFullYear()).slice(2)}`,
-    rotuloLongo: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
-  });
-
+  const mesesLista = ultimosMeses(new Date(), meses);
   const validas = faturas.itens.filter((f) => f.status !== 'cancelada');
-  const porMes = (pares: [Date, number][]) => {
-    const soma = new Map<string, number>();
-    for (const [d, v] of pares) soma.set(chaveMes(d), (soma.get(chaveMes(d)) ?? 0) + v);
-    return mesesLista.map((d) => ({ ...rotular(d), valor: Math.round((soma.get(chaveMes(d)) ?? 0) * 100) / 100 }));
-  };
-  const serieChamados = porMes(chamados.itens.filter((c) => c.abertoEm).map((c) => [c.abertoEm.toDate(), 1]));
-  const serieFaturamento = porMes(validas.filter((f) => f.emitidaEm).map((f) => [f.emitidaEm.toDate(), f.total]));
+  const serieChamados = serieMensal(mesesLista, chamados.itens.filter((c) => c.abertoEm).map((c) => [c.abertoEm.toDate(), 1]));
+  const serieFaturamento = serieMensal(mesesLista, validas.filter((f) => f.emitidaEm).map((f) => [f.emitidaEm.toDate(), f.total]));
 
   // Tempos
   const tma = media(
@@ -159,7 +136,7 @@ export function Indicadores() {
 
   return (
     <>
-      <CabecalhoPagina titulo="Indicadores" voltar="/interno/mais" />
+      <CabecalhoPagina titulo="Indicadores" />
       <div className="filtros" role="group" aria-label="Período: últimos meses">
         {PERIODOS.map((p) => (
           <button key={p} type="button" aria-pressed={meses === p} onClick={() => setMeses(p)}>
@@ -189,11 +166,13 @@ export function Indicadores() {
               valor={comExigencias.length ? pct(emDia.length / comExigencias.length) : '—'}
               detalhe={`${emDia.length} de ${comExigencias.length} com preventiva/exigências no prazo`}
             />
-            <Kpi
-              rotulo="Contratos: atendimento no prazo"
-              valor={deContrato.length ? pct(noPrazo / deContrato.length) : '—'}
-              detalhe={`${noPrazo} de ${deContrato.length} chamado(s) de equipamento com contrato`}
-            />
+            {financeiro && (
+              <Kpi
+                rotulo="Contratos: atendimento no prazo"
+                valor={deContrato.length ? pct(noPrazo / deContrato.length) : '—'}
+                detalhe={`${noPrazo} de ${deContrato.length} chamado(s) de equipamento com contrato`}
+              />
+            )}
             <Kpi
               rotulo="Satisfação dos clientes"
               valor={notaMedia == null ? '—' : `${notaMedia.toLocaleString('pt-BR')} / 5`}
@@ -203,26 +182,30 @@ export function Indicadores() {
 
           <GraficoColunas titulo="Chamados por mês" subtitulo={`Últimos ${meses} meses`} unidade="chamados" dados={serieChamados} formatar={(n) => String(Math.round(n))} />
 
-          <h2 className="secao-titulo">Faturamento</h2>
-          <div className="kpis">
-            <Kpi rotulo="Faturado" valor={fmtMoeda(faturado)} detalhe={`${validas.length} fatura(s) · ticket médio ${fmtMoeda(validas.length ? faturado / validas.length : 0)}`} />
-            <Kpi rotulo="Recebido" valor={fmtMoeda(recebido)} detalhe="pagamentos registrados no período" />
-            <Kpi rotulo="Em aberto" valor={fmtMoeda(emAberto)} detalhe="das faturas emitidas no período" />
-            <Kpi
-              rotulo="Serviços × peças"
-              valor={faturado ? `${Math.round((servicos / (servicos + pecasValor || 1)) * 100)}% / ${Math.round((pecasValor / (servicos + pecasValor || 1)) * 100)}%` : '—'}
-              detalhe={`${fmtMoeda(servicos)} em serviços · ${fmtMoeda(pecasValor)} em peças`}
-            />
-          </div>
+          {financeiro && (
+            <>
+              <h2 className="secao-titulo">Faturamento</h2>
+              <div className="kpis">
+                <Kpi rotulo="Faturado" valor={fmtMoeda(faturado)} detalhe={`${validas.length} fatura(s) · ticket médio ${fmtMoeda(validas.length ? faturado / validas.length : 0)}`} />
+                <Kpi rotulo="Recebido" valor={fmtMoeda(recebido)} detalhe="pagamentos registrados no período" />
+                <Kpi rotulo="Em aberto" valor={fmtMoeda(emAberto)} detalhe="das faturas emitidas no período" />
+                <Kpi
+                  rotulo="Serviços × peças"
+                  valor={faturado ? `${Math.round((servicos / (servicos + pecasValor || 1)) * 100)}% / ${Math.round((pecasValor / (servicos + pecasValor || 1)) * 100)}%` : '—'}
+                  detalhe={`${fmtMoeda(servicos)} em serviços · ${fmtMoeda(pecasValor)} em peças`}
+                />
+              </div>
 
-          <GraficoColunas
-            titulo="Faturamento por mês"
-            subtitulo="Faturas emitidas, sem as canceladas"
-            unidade="faturado"
-            dados={serieFaturamento}
-            formatar={(n) => fmtMoeda(n)}
-            formatarEixo={moedaEixo}
-          />
+              <GraficoColunas
+                titulo="Faturamento por mês"
+                subtitulo="Faturas emitidas, sem as canceladas"
+                unidade="faturado"
+                dados={serieFaturamento}
+                formatar={(n) => fmtMoeda(n)}
+                formatarEixo={moedaEixo}
+              />
+            </>
+          )}
 
           {!!comentarios.length && (
             <Cartao titulo="O que os clientes disseram">

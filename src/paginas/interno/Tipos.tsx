@@ -34,7 +34,6 @@ export function ListaTipos() {
       <CabecalhoPagina
         titulo="Tipos de equipamento"
         subtitulo="Checklists e medições de cada tipo"
-        voltar="/interno/mais"
         acoes={<LinkBotao para="/interno/tipos/novo" icone="mais_circulo">Novo</LinkBotao>}
       />
       <Aviso tom="info">

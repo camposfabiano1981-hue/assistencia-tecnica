@@ -10,10 +10,18 @@ export interface PontoColuna {
 
 const COR = '#0f6f9f'; // azul-petróleo da marca, mais saturado (validado: faixa de luminosidade, croma e contraste)
 
-function maximoRedondo(n: number): number {
-  if (n <= 0) return 1;
+/**
+ * Topo do eixo Y num número redondo. Para contagens (valores inteiros), o topo é par, para que a marca
+ * do meio também seja inteira (nada de "3" no lugar de 2,5).
+ */
+export function maximoRedondo(n: number, inteiro = false): number {
+  if (n <= 0) return inteiro ? 2 : 1;
   const potencia = 10 ** Math.floor(Math.log10(n));
-  for (const m of [1, 2, 2.5, 5, 10]) if (m * potencia >= n) return m * potencia;
+  const passos = inteiro && potencia === 1 ? [2, 4, 6, 8, 10] : [1, 2, 2.5, 5, 10];
+  for (const m of passos) {
+    const topo = m * potencia;
+    if (topo >= n && (!inteiro || topo % 2 === 0)) return topo;
+  }
   return 10 * potencia;
 }
 
@@ -56,7 +64,10 @@ export function GraficoColunas({
   const m = { esq: 52, dir: 10, topo: 24, base: 26 };
   const lp = largura - m.esq - m.dir;
   const ap = altura - m.topo - m.base;
-  const max = maximoRedondo(Math.max(...dados.map((d) => d.valor), 0));
+  const max = maximoRedondo(
+    Math.max(...dados.map((d) => d.valor), 0),
+    dados.every((d) => Number.isInteger(d.valor)),
+  );
   const marcas = [0, max / 2, max];
   const faixa = lp / Math.max(1, dados.length);
   const larguraBarra = Math.min(24, faixa * 0.6);

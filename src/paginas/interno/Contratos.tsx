@@ -82,7 +82,6 @@ export function ListaContratos() {
       <CabecalhoPagina
         titulo="Contratos"
         subtitulo="Manutenção com valor mensal"
-        voltar="/interno/mais"
         acoes={<LinkBotao para="/interno/contratos/novo" icone="mais_circulo">Novo</LinkBotao>}
       />
       {erro && <Aviso tom="erro">{mensagemErro(erro)}</Aviso>}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { collection, limit, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { useSessao } from '../../sessao';
+import { usePode, useSessao } from '../../sessao';
 import { mensagemErro, useConsulta, useDocumento } from '../../dados/hooks';
 import { agendarChamado, criarChamado, criarOS, mudarStatusChamado } from '../../dados/operacoes';
 import type { Chamado, Cliente, Contrato, Equipamento, Orcamento, StatusChamado, TipoOS, Usuario } from '../../tipos';
@@ -154,6 +154,7 @@ export function NovoChamadoInterno() {
 export function ChamadoInterno() {
   const { id = '' } = useParams();
   const { perfil } = useSessao();
+  const financeiro = usePode('financeiro');
   const { dados: c, carregando, erro } = useDocumento<Chamado>(`chamados/${id}`);
   const cliente = useDocumento<Cliente>(c ? `clientes/${c.clienteId}` : null);
   const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso'; texto: string } | null>(null);
@@ -186,7 +187,7 @@ export function ChamadoInterno() {
         acoes={<Selo tom={tomStatusChamado[c.status]}>{rotuloStatusChamado[c.status]}</Selo>}
       />
       {c.parado && !encerrado && <Aviso tom="erro">Equipamento PARADO segundo o cliente.</Aviso>}
-      <PrazoDoContrato chamado={c} />
+      {financeiro && <PrazoDoContrato chamado={c} />}
       {msg && <Aviso tom={msg.tom}>{msg.texto}</Aviso>}
 
       <Cartao titulo="Relato">
@@ -212,7 +213,7 @@ export function ChamadoInterno() {
       {!encerrado && <Agendar chamado={c} nome={nome} zap={zap} />}
 
       <OSDoChamado chamado={c} cliente={cliente.dados} />
-      <OrcamentosDoChamado chamado={c} />
+      {financeiro && <OrcamentosDoChamado chamado={c} />}
 
       {zap && (
         <Cartao titulo="Mensagens para o cliente (WhatsApp)">

@@ -111,7 +111,7 @@ export function csvClientes(lista: Cliente[]): string {
 
 export function csvEstoque(lista: Peca[]): string {
   return gerarCSV(
-    ['Código', 'Descrição', 'Unidade', 'Quantidade', 'Mínimo', 'Repor', 'Custo (R$)', 'Preço (R$)', 'Valor em estoque (R$)', 'NCM', 'Ativa'],
+    ['Código', 'Descrição', 'Unidade', 'Quantidade', 'Mínimo', 'Repor', 'Custo (R$)', 'Preço (R$)', 'Valor em estoque (R$)', 'NCM', 'Ativa', 'Fabricante', 'Aplicação'],
     [...lista]
       .sort((a, b) => porNome(a.descricao, b.descricao))
       .map((p) => [
@@ -120,12 +120,14 @@ export function csvEstoque(lista: Peca[]): string {
         p.unidade,
         p.quantidade,
         p.minimo,
-        p.ativo !== false && p.quantidade <= p.minimo,
+        p.ativo !== false && p.minimo > 0 && p.quantidade <= p.minimo,
         moeda(p.custo),
         moeda(p.preco),
         moeda(Math.max(0, p.quantidade) * (p.custo ?? 0)),
         p.ncm,
         p.ativo,
+        p.fabricante,
+        p.aplicacao,
       ]),
   );
 }

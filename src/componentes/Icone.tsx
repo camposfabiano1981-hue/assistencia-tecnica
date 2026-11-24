@@ -1,6 +1,8 @@
 // Ícones em traço (SVG embutido, sem dependências).
 const caminhos: Record<string, string> = {
   painel: 'M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
+  menu: 'M4 6h16M4 12h16M4 18h16',
+  escudo: 'M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6zM9 12l2 2 4-4',
   chamados: 'M9 3h6a1 1 0 0 1 1 1v2H8V4a1 1 0 0 1 1-1zM8 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2M9 12h6M9 16h4',
   chave: 'M14.5 4.5a4 4 0 0 0-5 5L3.5 15.5a1.4 1.4 0 0 0 2 2l6-6a4 4 0 0 0 5-5l-2.3 2.3-2-.5-.5-2z',
   pessoas: 'M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M21 20v-1a4 4 0 0 0-3-3.9M15.5 4.1a3.5 3.5 0 0 1 0 6.8',

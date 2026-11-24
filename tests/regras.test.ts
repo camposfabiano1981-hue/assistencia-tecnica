@@ -49,6 +49,7 @@ async function semear(instalar = true) {
     await setDoc(doc(db, 'config/empresa'), { nome: 'Empresa Teste' });
     await setDoc(doc(db, 'usuarios/gestor'), { nome: 'Gestor', email: 'g@x.com', papel: 'gestor', ativo: true });
     await setDoc(doc(db, 'usuarios/tec'), { nome: 'Técnico', email: 't@x.com', papel: 'tecnico', ativo: true });
+    await setDoc(doc(db, 'usuarios/adm'), { nome: 'Administrativo', email: 'adm@x.com', papel: 'administrativo', ativo: true });
     await setDoc(doc(db, 'clientes/c1'), { nome: 'Clínica A', tipo: 'consultorio_odonto', ativo: true });
     await setDoc(doc(db, 'clientes/c2'), { nome: 'Clínica B', tipo: 'clinica', ativo: true });
     await setDoc(doc(db, 'usuarios/cli1'), { nome: 'Dra. Ana', email: 'a@x.com', papel: 'cliente', clienteId: 'c1', ativo: true });
@@ -182,6 +183,34 @@ describe('perfis e cadastros', () => {
     await assertFails(setDoc(doc(fs('gestor'), 'usuarios/novo2'), { nome: 'N', email: 'n@x.com', papel: 'cliente', clienteId: 'nao-existe', ativo: true }));
     await assertFails(updateDoc(doc(fs('gestor'), 'usuarios/gestor'), { ativo: false }));
   });
+
+  it('vários gestores: o gestor cadastra e promove outro gestor, mas ninguém se rebaixa', async () => {
+    await semear();
+    const novo = { nome: 'Sócia', email: 's@x.com', papel: 'gestor', ativo: true };
+    await assertSucceeds(setDoc(doc(fs('gestor'), 'usuarios/socia'), novo));
+    await assertFails(setDoc(doc(fs('gestor'), 'usuarios/papel-invalido'), { ...novo, papel: 'dono' }));
+    // A nova gestora já gerencia a equipe: promove o técnico e muda o nível do administrativo.
+    await assertSucceeds(updateDoc(doc(fs('socia'), 'usuarios/tec'), { papel: 'gestor' }));
+    await assertSucceeds(updateDoc(doc(fs('socia'), 'usuarios/adm'), { papel: 'tecnico' }));
+    await assertSucceeds(updateDoc(doc(fs('socia'), 'usuarios/gestor'), { ativo: false }));
+    await assertFails(updateDoc(doc(fs('socia'), 'usuarios/socia'), { papel: 'tecnico' }));
+    await assertFails(updateDoc(doc(fs('socia'), 'usuarios/socia'), { ativo: false }));
+  });
+
+  it('administrativo só dá e bloqueia acesso de cliente; técnico e administrativo não mudam níveis', async () => {
+    await semear();
+    const cliente = { nome: 'Recepção', email: 'r@x.com', papel: 'cliente', clienteId: 'c1', ativo: true };
+    await assertSucceeds(setDoc(doc(fs('adm'), 'usuarios/recepcao'), cliente));
+    await assertSucceeds(updateDoc(doc(fs('adm'), 'usuarios/recepcao'), { ativo: false }));
+    await assertFails(updateDoc(doc(fs('adm'), 'usuarios/recepcao'), { papel: 'gestor' }));
+    await assertFails(setDoc(doc(fs('adm'), 'usuarios/novo-tec'), { nome: 'T', email: 't2@x.com', papel: 'tecnico', ativo: true }));
+    await assertFails(updateDoc(doc(fs('adm'), 'usuarios/tec'), { ativo: false }));
+    await assertFails(updateDoc(doc(fs('adm'), 'usuarios/adm'), { papel: 'gestor' }));
+    await assertFails(updateDoc(doc(fs('tec'), 'usuarios/tec'), { papel: 'gestor' }));
+    await assertFails(updateDoc(doc(fs('tec'), 'usuarios/cli1'), { ativo: false }));
+    // Todos da equipe leem a lista de pessoas (escolha do técnico da OS).
+    await assertSucceeds(getDocs(query(collection(fs('adm'), 'usuarios'), where('papel', 'in', ['gestor', 'tecnico']))));
+  });
 });
 
 describe('chamados', () => {
@@ -276,11 +305,13 @@ describe('ordens de serviço', () => {
     );
   });
 
-  it('técnico não edita OS de outro técnico; gestor edita', async () => {
+  it('técnico não edita OS de outro técnico; gestor e administrativo editam', async () => {
     await semear();
     await criarOS(fs('gestor'), { tecnicoId: 'outro' });
     await assertFails(updateDoc(doc(fs('tec'), 'os/1'), { diagnostico: 'x' }));
     await assertSucceeds(updateDoc(doc(fs('gestor'), 'os/1'), { diagnostico: 'x' }));
+    await assertSucceeds(updateDoc(doc(fs('adm'), 'os/1'), { tecnicoId: 'tec', tecnicoNome: 'Técnico' }));
+    await assertSucceeds(updateDoc(doc(fs('tec'), 'os/1'), { diagnostico: 'agora é minha' }));
   });
 });
 
@@ -358,7 +389,7 @@ describe('orçamentos (Fase 2)', () => {
     await assertSucceeds(updateDoc(doc(fs('cli2'), 'orcamentos/4'), resposta('recusado', 'cli2')));
   });
 
-  it('só a equipe cria orçamento, com numeração sequencial', async () => {
+  it('gestor e administrativo criam orçamento, com numeração sequencial; técnico não', async () => {
     await semear();
     const criar = (db: Firestore) =>
       runTransaction(db, async (tx) => {
@@ -369,8 +400,19 @@ describe('orçamentos (Fase 2)', () => {
         return n;
       });
     await assertFails(criar(fs('cli1')));
-    expect(await criar(fs('tec'))).toBe(1);
+    await assertFails(criar(fs('tec')));
+    expect(await criar(fs('adm'))).toBe(1);
     expect(await criar(fs('gestor'))).toBe(2);
+  });
+
+  it('técnico não vê orçamentos nem faturas', async () => {
+    await semearFase2();
+    await assertFails(getDoc(doc(fs('tec'), 'orcamentos/1')));
+    await assertFails(getDocs(query(collection(fs('tec'), 'orcamentos'), where('chamadoId', '==', 'x'))));
+    await assertFails(getDoc(doc(fs('tec'), 'faturas/1')));
+    await assertFails(getDoc(doc(fs('tec'), 'contadores/faturas')));
+    await assertSucceeds(getDoc(doc(fs('adm'), 'orcamentos/1')));
+    await assertSucceeds(getDocs(query(collection(fs('adm'), 'faturas'), where('status', '==', 'aberta'))));
   });
 });
 
@@ -380,7 +422,8 @@ describe('faturas, instrumentos e estoque (Fase 2)', () => {
     await assertSucceeds(getDoc(doc(fs('cli1'), 'faturas/1')));
     await assertFails(getDoc(doc(fs('cli2'), 'faturas/1')));
     await assertFails(updateDoc(doc(fs('cli1'), 'faturas/1'), { status: 'paga' }));
-    await assertSucceeds(updateDoc(doc(fs('tec'), 'faturas/1'), { status: 'paga' }));
+    await assertFails(updateDoc(doc(fs('tec'), 'faturas/1'), { status: 'paga' }));
+    await assertSucceeds(updateDoc(doc(fs('adm'), 'faturas/1'), { status: 'paga' }));
   });
 
   it('estoque e instrumentos são só da equipe; movimentos não se alteram', async () => {
@@ -391,20 +434,35 @@ describe('faturas, instrumentos e estoque (Fase 2)', () => {
     await assertSucceeds(setDoc(doc(fs('tec'), 'pecas/p1/movimentos/m1'), { tipo: 'saida', quantidade: 1 }));
     await assertFails(updateDoc(doc(fs('tec'), 'pecas/p1/movimentos/m1'), { quantidade: 0 }));
     await assertFails(deleteDoc(doc(fs('tec'), 'pecas/p1')));
+    await assertFails(deleteDoc(doc(fs('adm'), 'pecas/p1')));
     await assertSucceeds(deleteDoc(doc(fs('gestor'), 'pecas/p1')));
   });
 
-  it('catálogo de serviços: só a equipe lê e grava; preço obrigatório; só o gestor apaga', async () => {
+  it('cadastro de peças: gestor e administrativo cadastram e definem preços; o técnico só movimenta o saldo', async () => {
+    await semearFase2();
+    const peca = { descricao: 'Fusível 5x20 mm', unidade: 'un', quantidade: 0, minimo: 2, custo: 1, preco: 5, ativo: true };
+    await assertFails(setDoc(doc(fs('tec'), 'pecas/p2'), peca));
+    await assertSucceeds(setDoc(doc(fs('adm'), 'pecas/p2'), peca));
+    await assertSucceeds(updateDoc(doc(fs('adm'), 'pecas/p2'), { preco: 6, fabricante: 'Genérico' }));
+    await assertSucceeds(updateDoc(doc(fs('tec'), 'pecas/p2'), { quantidade: 10 }));
+    await assertFails(updateDoc(doc(fs('tec'), 'pecas/p2'), { preco: 1 }));
+    await assertFails(updateDoc(doc(fs('tec'), 'pecas/p2'), { quantidade: 9, custo: 0 }));
+    await assertSucceeds(getDocs(query(collection(fs('tec'), 'pecas'), orderBy('descricao'))));
+  });
+
+  it('catálogo de serviços: a equipe consulta; gestor e administrativo gravam; preço obrigatório; só o gestor apaga', async () => {
     await semearFase2();
     const servico = { descricao: 'Visita técnica', unidade: 'visita', preco: 150, ativo: true };
     await assertFails(setDoc(doc(fs('cli1'), 'servicos/s1'), servico));
-    await assertSucceeds(setDoc(doc(fs('tec'), 'servicos/s1'), servico));
-    await assertFails(setDoc(doc(fs('tec'), 'servicos/s2'), { descricao: 'Sem preço', unidade: 'hora', ativo: true }));
-    await assertFails(setDoc(doc(fs('tec'), 'servicos/s3'), { ...servico, preco: '150' }));
+    await assertFails(setDoc(doc(fs('tec'), 'servicos/s1'), servico));
+    await assertSucceeds(setDoc(doc(fs('adm'), 'servicos/s1'), servico));
+    await assertFails(setDoc(doc(fs('adm'), 'servicos/s2'), { descricao: 'Sem preço', unidade: 'hora', ativo: true }));
+    await assertFails(setDoc(doc(fs('adm'), 'servicos/s3'), { ...servico, preco: '150' }));
     await assertFails(getDoc(doc(fs('cli1'), 'servicos/s1')));
     await assertSucceeds(getDocs(query(collection(fs('tec'), 'servicos'), orderBy('descricao'))));
-    await assertSucceeds(updateDoc(doc(fs('tec'), 'servicos/s1'), { preco: 180 }));
-    await assertFails(deleteDoc(doc(fs('tec'), 'servicos/s1')));
+    await assertFails(updateDoc(doc(fs('tec'), 'servicos/s1'), { preco: 1 }));
+    await assertSucceeds(updateDoc(doc(fs('adm'), 'servicos/s1'), { preco: 180 }));
+    await assertFails(deleteDoc(doc(fs('adm'), 'servicos/s1')));
     await assertSucceeds(deleteDoc(doc(fs('gestor'), 'servicos/s1')));
   });
 });
@@ -521,21 +579,24 @@ describe('contratos de manutenção (Fase 3)', () => {
       return n;
     });
 
-  it('só a equipe cria, com numeração sequencial e valor válido', async () => {
+  it('gestor e administrativo criam, com numeração sequencial e valor válido; técnico não', async () => {
     await semear();
     await assertFails(criarContrato(fs('cli1')));
-    await assertFails(criarContrato(fs('tec'), { valor: -10 }));
-    await assertFails(criarContrato(fs('tec'), { status: 'encerrado' }));
-    expect(await criarContrato(fs('tec'))).toBe(1);
-    await assertFails(setDoc(doc(fs('tec'), 'contratos/7'), contrato(7)));
-    await assertSucceeds(updateDoc(doc(fs('tec'), 'contratos/1'), { valor: 480, status: 'suspenso' }));
-    await assertFails(updateDoc(doc(fs('tec'), 'contratos/1'), { clienteId: 'c2' }));
+    await assertFails(criarContrato(fs('tec')));
+    await assertFails(criarContrato(fs('adm'), { valor: -10 }));
+    await assertFails(criarContrato(fs('adm'), { status: 'encerrado' }));
+    expect(await criarContrato(fs('adm'))).toBe(1);
+    await assertFails(setDoc(doc(fs('adm'), 'contratos/7'), contrato(7)));
+    await assertSucceeds(updateDoc(doc(fs('adm'), 'contratos/1'), { valor: 480, status: 'suspenso' }));
+    await assertFails(updateDoc(doc(fs('adm'), 'contratos/1'), { clienteId: 'c2' }));
+    await assertFails(updateDoc(doc(fs('tec'), 'contratos/1'), { valor: 1 }));
+    await assertFails(getDoc(doc(fs('tec'), 'contratos/1')));
     await assertFails(deleteDoc(doc(fs('gestor'), 'contratos/1')));
   });
 
   it('o cliente lê só os próprios contratos e não altera', async () => {
     await semear();
-    await criarContrato(fs('tec'));
+    await criarContrato(fs('adm'));
     await assertSucceeds(getDoc(doc(fs('cli1'), 'contratos/1')));
     await assertSucceeds(getDocs(query(collection(fs('cli1'), 'contratos'), where('clienteId', '==', 'c1'))));
     await assertFails(getDoc(doc(fs('cli2'), 'contratos/1')));

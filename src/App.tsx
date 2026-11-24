@@ -1,6 +1,6 @@
-import { BrowserRouter, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { ProvedorSessao } from './sessao';
-import { ExigePapel, Inicio, LayoutInterno, LayoutPortal } from './componentes/Layouts';
+import { ExigePapel, ExigePermissao, Inicio, LayoutInterno, LayoutPortal } from './componentes/Layouts';
 import { Login } from './paginas/Login';
 import { Instalar } from './paginas/Instalar';
 import { QrEquipamento } from './paginas/Qr';
@@ -12,7 +12,7 @@ import { ContaCliente } from './paginas/portal/Conta';
 import { FinanceiroCliente, OrcamentoCliente, FaturaCliente } from './paginas/portal/Financeiro';
 import { AvaliarOS } from './paginas/portal/Avaliar';
 import { PastaVisa } from './paginas/portal/Visa';
-import { Financeiro, OrcamentoEditar, OrcamentoDetalhe, FaturaNova, FaturaDetalhe } from './paginas/interno/Financeiro';
+import { Financeiro, FinanceiroAntigo, OrcamentoEditar, OrcamentoDetalhe, FaturaNova, FaturaDetalhe } from './paginas/interno/Financeiro';
 import { Vencimentos, ListaInstrumentos, InstrumentoEditar, ListaEstoque, PecaDetalhe } from './paginas/interno/Controle';
 import { Painel } from './paginas/interno/Painel';
 import { ListaChamados, ChamadoInterno, NovoChamadoInterno } from './paginas/interno/Chamados';
@@ -23,11 +23,11 @@ import { ListaEquipamentos, EquipamentoEditar, EquipamentoDetalhe } from './pagi
 import { ListaTipos, TipoEditar } from './paginas/interno/Tipos';
 import { Etiquetas } from './paginas/interno/Etiquetas';
 import { Configuracoes } from './paginas/interno/Configuracoes';
-import { Mais } from './paginas/interno/Mais';
 import { Indicadores } from './paginas/interno/Indicadores';
 import { Backup } from './paginas/interno/Backup';
 import { ListaServicos, ServicoEditar } from './paginas/interno/Servicos';
 import { ListaContratos, ContratoEditar, ContratoDetalhe } from './paginas/interno/Contratos';
+import { EquipeAcessos } from './paginas/interno/Equipe';
 
 export function App() {
   return (
@@ -55,7 +55,7 @@ export function App() {
             </Route>
           </Route>
 
-          <Route element={<ExigePapel papeis={['gestor', 'tecnico']} />}>
+          <Route element={<ExigePapel papeis={['gestor', 'administrativo', 'tecnico']} />}>
             <Route path="/interno" element={<LayoutInterno />}>
               <Route index element={<Painel />} />
               <Route path="chamados" element={<ListaChamados />} />
@@ -75,27 +75,38 @@ export function App() {
               <Route path="tipos" element={<ListaTipos />} />
               <Route path="tipos/:id" element={<TipoEditar />} />
               <Route path="etiquetas" element={<Etiquetas />} />
-              <Route path="config" element={<Configuracoes />} />
-              <Route path="mais" element={<Mais />} />
-              <Route path="financeiro" element={<Financeiro />} />
-              <Route path="orcamentos/novo" element={<OrcamentoEditar />} />
-              <Route path="orcamentos/:id" element={<OrcamentoDetalhe />} />
-              <Route path="orcamentos/:id/editar" element={<OrcamentoEditar />} />
-              <Route path="faturas/nova" element={<FaturaNova />} />
-              <Route path="faturas/:id" element={<FaturaDetalhe />} />
+              <Route path="mais" element={<Navigate to="/interno" replace />} />
+              <Route element={<ExigePermissao permissao="configuracoes" />}>
+                <Route path="config" element={<Configuracoes />} />
+              </Route>
+              <Route element={<ExigePermissao permissao="equipe" />}>
+                <Route path="equipe" element={<EquipeAcessos />} />
+              </Route>
+              <Route element={<ExigePermissao permissao="financeiro" />}>
+                <Route path="financeiro" element={<FinanceiroAntigo />} />
+                <Route path="orcamentos" element={<Financeiro aba="orcamentos" />} />
+                <Route path="orcamentos/novo" element={<OrcamentoEditar />} />
+                <Route path="orcamentos/:id" element={<OrcamentoDetalhe />} />
+                <Route path="orcamentos/:id/editar" element={<OrcamentoEditar />} />
+                <Route path="faturas" element={<Financeiro aba="faturas" />} />
+                <Route path="faturas/nova" element={<FaturaNova />} />
+                <Route path="faturas/:id" element={<FaturaDetalhe />} />
+                <Route path="contratos" element={<ListaContratos />} />
+                <Route path="contratos/novo" element={<ContratoEditar />} />
+                <Route path="contratos/:id" element={<ContratoDetalhe />} />
+                <Route path="contratos/:id/editar" element={<ContratoEditar />} />
+              </Route>
               <Route path="vencimentos" element={<Vencimentos />} />
               <Route path="instrumentos" element={<ListaInstrumentos />} />
               <Route path="instrumentos/:id" element={<InstrumentoEditar />} />
               <Route path="estoque" element={<ListaEstoque />} />
               <Route path="estoque/:id" element={<PecaDetalhe />} />
               <Route path="indicadores" element={<Indicadores />} />
-              <Route path="backup" element={<Backup />} />
+              <Route element={<ExigePermissao permissao="planilhas" />}>
+                <Route path="backup" element={<Backup />} />
+              </Route>
               <Route path="servicos" element={<ListaServicos />} />
               <Route path="servicos/:id" element={<ServicoEditar />} />
-              <Route path="contratos" element={<ListaContratos />} />
-              <Route path="contratos/novo" element={<ContratoEditar />} />
-              <Route path="contratos/:id" element={<ContratoDetalhe />} />
-              <Route path="contratos/:id/editar" element={<ContratoEditar />} />
             </Route>
           </Route>
 
