@@ -2,7 +2,12 @@ rules_version = '2';
 
 // Regras de segurança do Firestore.
 // Sem servidor, estas regras são a única barreira: todo acesso passa por aqui.
-// Papéis (coleção usuarios): gestor, tecnico, cliente. Conta sem perfil ativo não acessa nada.
+// Níveis de acesso (coleção usuarios, campo papel):
+//   gestor         tudo, inclusive configurações, equipe e cópia de segurança (pode haver vários);
+//   administrativo atendimento e financeiro, sem configurações nem equipe;
+//   tecnico        atendimento técnico, sem o financeiro;
+//   cliente        só o portal, com os dados do próprio cadastro.
+// Conta sem perfil ativo não acessa nada.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -14,7 +19,11 @@ service cloud.firestore {
     function perfil() { return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data; }
     function ativo() { return temPerfil() && perfil().ativo == true; }
     function gestor() { return ativo() && perfil().papel == 'gestor'; }
-    function equipe() { return ativo() && perfil().papel in ['gestor', 'tecnico']; }
+    function administrativo() { return ativo() && perfil().papel == 'administrativo'; }
+    function tecnico() { return ativo() && perfil().papel == 'tecnico'; }
+    function equipe() { return ativo() && perfil().papel in ['gestor', 'administrativo', 'tecnico']; }
+    // Orçamentos, faturas, contratos e preços: gestor e administrativo (o técnico não vê).
+    function financeiro() { return ativo() && perfil().papel in ['gestor', 'administrativo']; }
     function cliente() { return ativo() && perfil().papel == 'cliente'; }
     function meuCliente() { return perfil().clienteId; }
     function dados() { return request.resource.data; }
@@ -31,7 +40,7 @@ service cloud.firestore {
     // ---------- Usuários ----------
     match /usuarios/{uid} {
       function usuarioValido() {
-        return dados().papel in ['gestor', 'tecnico', 'cliente']
+        return dados().papel in ['gestor', 'administrativo', 'tecnico', 'cliente']
           && dados().ativo is bool
           && texto(dados().nome, 120)
           && texto(dados().email, 200)
@@ -40,12 +49,15 @@ service cloud.firestore {
                   && exists(/databases/$(database)/documents/clientes/$(dados().clienteId))));
       }
       allow read: if logado() && (request.auth.uid == uid || equipe());
+      // O gestor cadastra qualquer nível (inclusive outros gestores); o administrativo só dá acesso de cliente ao portal.
       allow create: if (gestor() && usuarioValido())
+        || (administrativo() && dados().papel == 'cliente' && usuarioValido())
         || (request.auth.uid == uid && instalando()
             && dados().papel == 'gestor' && dados().ativo == true && usuarioValido());
-      // O gestor não pode rebaixar nem desativar a si mesmo (evita ficar trancado para fora).
-      allow update: if gestor() && usuarioValido()
-        && (uid != request.auth.uid || (dados().papel == 'gestor' && dados().ativo == true));
+      // Ninguém rebaixa nem bloqueia a si mesmo: assim sempre sobra ao menos um gestor.
+      allow update: if (gestor() && usuarioValido()
+          && (uid != request.auth.uid || (dados().papel == 'gestor' && dados().ativo == true)))
+        || (administrativo() && resource.data.papel == 'cliente' && dados().papel == 'cliente' && usuarioValido());
       allow delete: if false;
     }
 
@@ -161,8 +173,9 @@ service cloud.firestore {
         return getAfter(/databases/$(database)/documents/contadores/os).data.n == int(id)
           && dados().numero == int(id);
       }
+      // Gestor e administrativo editam qualquer OS (agenda, troca de técnico); o técnico, só as dele.
       function podeEditar() {
-        return gestor() || (equipe() && resource.data.tecnicoId == request.auth.uid);
+        return gestor() || administrativo() || (tecnico() && resource.data.tecnicoId == request.auth.uid);
       }
       allow read: if equipe()
         || (cliente() && resource.data.clienteId == meuCliente() && resource.data.status == 'concluida');
@@ -188,19 +201,19 @@ service cloud.firestore {
 
     // ================= Fase 2 =================
 
-    // Numeração de orçamentos e faturas (mesma trava dos chamados e OS).
+    // Numeração de orçamentos e faturas (mesma trava dos chamados e OS). Financeiro: gestor e administrativo.
     match /contadores/orcamentos {
-      allow read: if equipe();
-      allow create: if equipe() && dados().keys().hasOnly(['n']) && dados().n == 1
+      allow read: if financeiro();
+      allow create: if financeiro() && dados().keys().hasOnly(['n']) && dados().n == 1
         && existsAfter(/databases/$(database)/documents/orcamentos/1);
-      allow update: if equipe() && dados().keys().hasOnly(['n']) && dados().n == resource.data.n + 1
+      allow update: if financeiro() && dados().keys().hasOnly(['n']) && dados().n == resource.data.n + 1
         && existsAfter(/databases/$(database)/documents/orcamentos/$(string(dados().n)));
     }
     match /contadores/faturas {
-      allow read: if equipe();
-      allow create: if equipe() && dados().keys().hasOnly(['n']) && dados().n == 1
+      allow read: if financeiro();
+      allow create: if financeiro() && dados().keys().hasOnly(['n']) && dados().n == 1
         && existsAfter(/databases/$(database)/documents/faturas/1);
-      allow update: if equipe() && dados().keys().hasOnly(['n']) && dados().n == resource.data.n + 1
+      allow update: if financeiro() && dados().keys().hasOnly(['n']) && dados().n == resource.data.n + 1
         && existsAfter(/databases/$(database)/documents/faturas/$(string(dados().n)));
     }
 
@@ -230,10 +243,10 @@ service cloud.firestore {
           && (!('motivo' in dados().resposta) || texto(dados().resposta.motivo, 500))
           && dentroDaValidade();
       }
-      allow read: if equipe()
+      allow read: if financeiro()
         || (cliente() && resource.data.clienteId == meuCliente() && visivelAoCliente());
-      allow create: if equipe() && contadorOk() && dados().clienteId is string && dados().total is number;
-      allow update: if (equipe() && dados().numero == resource.data.numero && dados().clienteId == resource.data.clienteId)
+      allow create: if financeiro() && contadorOk() && dados().clienteId is string && dados().total is number;
+      allow update: if (financeiro() && dados().numero == resource.data.numero && dados().clienteId == resource.data.clienteId)
         || (cliente() && resource.data.clienteId == meuCliente() && respostaDoCliente());
       allow delete: if false;
     }
@@ -244,9 +257,9 @@ service cloud.firestore {
         return getAfter(/databases/$(database)/documents/contadores/faturas).data.n == int(id)
           && dados().numero == int(id);
       }
-      allow read: if equipe() || (cliente() && resource.data.clienteId == meuCliente());
-      allow create: if equipe() && contadorOk() && dados().clienteId is string && dados().total is number;
-      allow update: if equipe() && dados().numero == resource.data.numero && dados().clienteId == resource.data.clienteId;
+      allow read: if financeiro() || (cliente() && resource.data.clienteId == meuCliente());
+      allow create: if financeiro() && contadorOk() && dados().clienteId is string && dados().total is number;
+      allow update: if financeiro() && dados().numero == resource.data.numero && dados().clienteId == resource.data.clienteId;
       allow delete: if false;
     }
 
@@ -256,7 +269,11 @@ service cloud.firestore {
       allow delete: if gestor();
     }
     match /pecas/{id} {
-      allow read, create, update: if equipe();
+      allow read: if equipe();
+      // Cadastro e preços: gestor e administrativo. O técnico só mexe no saldo (baixa da OS, entrada, ajuste).
+      allow create: if financeiro();
+      allow update: if financeiro()
+        || (tecnico() && dados().diff(resource.data).affectedKeys().hasOnly(['quantidade']));
       allow delete: if gestor();
       // Histórico de movimentos não se altera nem se apaga.
       match /movimentos/{movimento} {
@@ -297,10 +314,10 @@ service cloud.firestore {
 
     // ---------- Contratos de manutenção ----------
     match /contadores/contratos {
-      allow read: if equipe();
-      allow create: if equipe() && dados().keys().hasOnly(['n']) && dados().n == 1
+      allow read: if financeiro();
+      allow create: if financeiro() && dados().keys().hasOnly(['n']) && dados().n == 1
         && existsAfter(/databases/$(database)/documents/contratos/1);
-      allow update: if equipe() && dados().keys().hasOnly(['n']) && dados().n == resource.data.n + 1
+      allow update: if financeiro() && dados().keys().hasOnly(['n']) && dados().n == resource.data.n + 1
         && existsAfter(/databases/$(database)/documents/contratos/$(string(dados().n)));
     }
     match /contratos/{id} {
@@ -308,18 +325,18 @@ service cloud.firestore {
         return getAfter(/databases/$(database)/documents/contadores/contratos).data.n == int(id)
           && dados().numero == int(id);
       }
-      allow read: if equipe() || (cliente() && resource.data.clienteId == meuCliente());
-      allow create: if equipe() && contadorOk() && dados().clienteId is string && dados().valor is number
+      allow read: if financeiro() || (cliente() && resource.data.clienteId == meuCliente());
+      allow create: if financeiro() && contadorOk() && dados().clienteId is string && dados().valor is number
         && dados().valor >= 0 && dados().status == 'ativo';
-      allow update: if equipe() && dados().numero == resource.data.numero && dados().clienteId == resource.data.clienteId
+      allow update: if financeiro() && dados().numero == resource.data.numero && dados().clienteId == resource.data.clienteId
         && dados().valor is number && dados().valor >= 0;
       allow delete: if false;
     }
 
-    // ---------- Catálogo de serviços (tabela de preços): só a equipe ----------
+    // ---------- Catálogo de serviços (tabela de preços): a equipe consulta; gestor e administrativo alteram ----------
     match /servicos/{id} {
       allow read: if equipe();
-      allow create, update: if equipe() && texto(dados().descricao, 200) && dados().preco is number && dados().ativo is bool;
+      allow create, update: if financeiro() && texto(dados().descricao, 200) && dados().preco is number && dados().ativo is bool;
       allow delete: if gestor();
     }
   }

@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { useSessao } from '../../sessao';
+import { usePode } from '../../sessao';
 import { mensagemErro, useDocumento } from '../../dados/hooks';
 import { UNIDADES_SERVICO, incluirServicosSugeridos, useCatalogoServicos } from '../../dados/servicos';
 import type { ServicoCatalogo } from '../../tipos';
@@ -12,6 +12,7 @@ import { CampoNumero } from '../../componentes/Valores';
 import { Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, LinhaLista, LinkBotao, Selo, Vazio } from '../../componentes/ui';
 
 export function ListaServicos() {
+  const podeAlterar = usePode('financeiro');
   const { itens, carregando, erro } = useCatalogoServicos();
   const [busca, setBusca] = useState('');
   const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso'; texto: string } | null>(null);
@@ -36,9 +37,9 @@ export function ListaServicos() {
       <CabecalhoPagina
         titulo="Serviços e preços"
         subtitulo="Escolha estes serviços no orçamento, na fatura e na OS"
-        voltar="/interno/mais"
-        acoes={<LinkBotao para="/interno/servicos/novo" icone="mais_circulo">Novo</LinkBotao>}
+        acoes={podeAlterar && <LinkBotao para="/interno/servicos/novo" icone="mais_circulo">Novo</LinkBotao>}
       />
+      {!podeAlterar && <Aviso tom="info">Tabela só para consulta: os preços são definidos pelo gestor ou pelo administrativo.</Aviso>}
       {msg && <Aviso tom={msg.tom}>{msg.texto}</Aviso>}
       {erro && <Aviso tom="erro">{mensagemErro(erro)}</Aviso>}
       {carregando ? (
@@ -47,11 +48,13 @@ export function ListaServicos() {
         <Vazio icone="chave" titulo="Nenhum serviço cadastrado">
           Cadastre o que você cobra (visita, hora técnica, preventiva, ensaio…) com o preço. Os serviços com valor diferente a cada vez
           continuam podendo ser lançados como avulsos.
-          <div className="acoes" style={{ justifyContent: 'center' }}>
-            <Botao variante="secundario" carregando={incluindo} onClick={() => void sugerir()}>
-              Incluir serviços sugeridos
-            </Botao>
-          </div>
+          {podeAlterar && (
+            <div className="acoes" style={{ justifyContent: 'center' }}>
+              <Botao variante="secundario" carregando={incluindo} onClick={() => void sugerir()}>
+                Incluir serviços sugeridos
+              </Botao>
+            </div>
+          )}
         </Vazio>
       ) : (
         <>
@@ -67,11 +70,13 @@ export function ListaServicos() {
               />
             ))}
           </div>
-          <div className="acoes">
-            <Botao variante="fantasma" carregando={incluindo} onClick={() => void sugerir()}>
-              Incluir serviços sugeridos que faltam
-            </Botao>
-          </div>
+          {podeAlterar && (
+            <div className="acoes">
+              <Botao variante="fantasma" carregando={incluindo} onClick={() => void sugerir()}>
+                Incluir serviços sugeridos que faltam
+              </Botao>
+            </div>
+          )}
         </>
       )}
     </>
@@ -84,7 +89,8 @@ export function ServicoEditar() {
   const { id = 'novo' } = useParams();
   const novo = id === 'novo';
   const navegar = useNavigate();
-  const { perfil } = useSessao();
+  const podeAlterar = usePode('financeiro');
+  const podeExcluir = usePode('excluir');
   const existente = useDocumento<ServicoCatalogo>(novo ? null : `servicos/${id}`);
   const [f, setF] = useState<Form | null>(null);
   const [erro, setErro] = useState('');
@@ -136,33 +142,38 @@ export function ServicoEditar() {
     <form onSubmit={salvar}>
       <CabecalhoPagina titulo={novo ? 'Novo serviço' : f.descricao || 'Serviço'} voltar="/interno/servicos" />
       {erro && <Aviso tom="erro">{erro}</Aviso>}
+      {!podeAlterar && <Aviso tom="info">Só para consulta: o gestor ou o administrativo altera os serviços e os preços.</Aviso>}
       <Cartao>
-        <Campo rotulo="Descrição" required value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} placeholder="Ex.: Hora técnica" />
-        <div className="grade grade-3">
-          <Campo rotulo="Código (opcional)" value={f.codigo} onChange={(e) => setF({ ...f, codigo: e.target.value })} />
-          <Campo rotulo="Unidade" list="unidades-servico" value={f.unidade} onChange={(e) => setF({ ...f, unidade: e.target.value })} ajuda="Ex.: hora, visita, km" />
-          <div className="campo">
-            <span className="campo-rotulo">Preço (R$)</span>
-            <CampoNumero rotulo="Preço" className="campo-valor" valor={f.preco} aoMudar={(n) => setF({ ...f, preco: n })} />
+        <fieldset className="fieldset-limpo" disabled={!podeAlterar}>
+          <Campo rotulo="Descrição" required value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} placeholder="Ex.: Hora técnica" />
+          <div className="grade grade-3">
+            <Campo rotulo="Código (opcional)" value={f.codigo} onChange={(e) => setF({ ...f, codigo: e.target.value })} />
+            <Campo rotulo="Unidade" list="unidades-servico" value={f.unidade} onChange={(e) => setF({ ...f, unidade: e.target.value })} ajuda="Ex.: hora, visita, km" />
+            <div className="campo">
+              <span className="campo-rotulo">Preço (R$)</span>
+              <CampoNumero rotulo="Preço" className="campo-valor" valor={f.preco} aoMudar={(n) => setF({ ...f, preco: n })} />
+            </div>
           </div>
-        </div>
-        <datalist id="unidades-servico">
-          {UNIDADES_SERVICO.map((u) => (
-            <option key={u} value={u} />
-          ))}
-        </datalist>
-        <label className="marcador">
-          <input type="checkbox" checked={f.ativo} onChange={(e) => setF({ ...f, ativo: e.target.checked })} />
-          <span>
-            Disponível para escolher
-            <span className="pequeno" style={{ display: 'block' }}>Desmarque para tirar da lista sem apagar.</span>
-          </span>
-        </label>
-        <Botao type="submit" carregando={salvando}>
-          Salvar serviço
-        </Botao>
+          <datalist id="unidades-servico">
+            {UNIDADES_SERVICO.map((u) => (
+              <option key={u} value={u} />
+            ))}
+          </datalist>
+          <label className="marcador">
+            <input type="checkbox" checked={f.ativo} onChange={(e) => setF({ ...f, ativo: e.target.checked })} />
+            <span>
+              Disponível para escolher
+              <span className="pequeno" style={{ display: 'block' }}>Desmarque para tirar da lista sem apagar.</span>
+            </span>
+          </label>
+          {podeAlterar && (
+            <Botao type="submit" carregando={salvando}>
+              Salvar serviço
+            </Botao>
+          )}
+        </fieldset>
       </Cartao>
-      {!novo && perfil?.papel === 'gestor' && (
+      {!novo && podeExcluir && (
         <Botao type="button" variante="perigo" icone="lixo" onClick={() => void excluir()}>
           Excluir serviço
         </Botao>

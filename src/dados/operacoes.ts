@@ -393,13 +393,13 @@ export async function carregarFotos(caminhoColecao: string): Promise<Foto[]> {
 // ---------------- Acessos ----------------
 
 /**
- * Cria o login de um cliente ou técnico e manda o e-mail para a pessoa criar a própria senha.
- * O gestor continua logado.
+ * Cria o login de uma pessoa (cliente do portal ou alguém da equipe, em qualquer nível) e manda o e-mail
+ * para ela criar a própria senha. Quem cadastra continua logado.
  */
 export async function criarAcesso(p: {
   nome: string;
   email: string;
-  papel: Exclude<Papel, 'gestor'>;
+  papel: Papel;
   clienteId?: string;
   registroProfissional?: string;
   telefone?: string;
@@ -424,6 +424,11 @@ export async function criarAcesso(p: {
 
 export function reenviarConvite(email: string) {
   return enviarEmailSenha(email);
+}
+
+/** Muda o nível de acesso de alguém da equipe (as regras impedem que a pessoa mude o próprio nível). */
+export function mudarPapel(usuario: Usuario, papel: Papel) {
+  return updateDoc(doc(db, 'usuarios', usuario.id), { papel });
 }
 
 export function definirAtivo(usuario: Usuario, ativo: boolean) {

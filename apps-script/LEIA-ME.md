@@ -9,7 +9,7 @@ Limite da conta Google gratuita: 100 destinatários por dia.
 1. Entre em <https://script.google.com> com a conta Google que vai **enviar** os avisos e clique em
    **Novo projeto**. Dê o nome "Aviso de chamados".
 2. Apague o conteúdo do editor, cole todo o arquivo `Codigo.gs` e salve (ícone de disquete).
-3. No app, vá em **Mais → Configurações → Aviso de novo chamado por e-mail** e toque em
+3. No app, vá em **Administração → Configurações → Aviso de novo chamado por e-mail** e toque em
    **Gerar código**. Copie o código (ainda não salve).
 4. No script, clique na engrenagem (**Configurações do projeto**) → **Propriedades do script** →
    **Adicionar propriedade de script** e crie três:

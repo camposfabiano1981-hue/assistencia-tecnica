@@ -4,6 +4,7 @@ import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { clearIndexedDbPersistence, doc, onSnapshot, terminate } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import type { Empresa, Usuario } from './tipos';
+import { ehEquipe, pode, type Permissao } from './acessos';
 
 interface Sessao {
   usuario: User | null;
@@ -91,5 +92,11 @@ export function useSessao(): Sessao {
 
 export function useEquipe(): boolean {
   const { perfil } = useSessao();
-  return !!perfil?.ativo && (perfil.papel === 'gestor' || perfil.papel === 'tecnico');
+  return ehEquipe(perfil);
+}
+
+/** A pessoa logada pode usar esta área (nível de acesso)? */
+export function usePode(permissao: Permissao): boolean {
+  const { perfil } = useSessao();
+  return pode(perfil, permissao);
 }

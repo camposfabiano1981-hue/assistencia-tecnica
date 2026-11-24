@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { addDoc, collection, doc, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { useSessao } from '../../sessao';
+import { usePode, useSessao } from '../../sessao';
+import { pode } from '../../acessos';
 import { mensagemErro, useConsulta, useDocumento } from '../../dados/hooks';
 import { criarAcesso, definirAtivo, reenviarConvite } from '../../dados/operacoes';
 import type { Chamado, Cliente, Equipamento, TipoCliente, Usuario } from '../../tipos';
@@ -148,6 +149,7 @@ export function ClienteEditar() {
 
 export function ClienteDetalhe() {
   const { id = '' } = useParams();
+  const financeiro = usePode('financeiro');
   const cliente = useDocumento<Cliente>(`clientes/${id}`);
   const equipamentos = useConsulta<Equipamento>(() => query(collection(db, 'equipamentos'), where('clienteId', '==', id)), [id]);
   const chamados = useConsulta<Chamado>(() => query(collection(db, 'chamados'), where('clienteId', '==', id)), [id]);
@@ -187,9 +189,11 @@ export function ClienteDetalhe() {
             Registrar chamado
           </LinkBotao>
           <BotaoDossieVisa clienteId={id} rotulo="Pasta da VISA (PDF)" />
-          <LinkBotao para={`/interno/contratos/novo?cliente=${id}`} variante="secundario" icone="lista">
-            Novo contrato
-          </LinkBotao>
+          {financeiro && (
+            <LinkBotao para={`/interno/contratos/novo?cliente=${id}`} variante="secundario" icone="lista">
+              Novo contrato
+            </LinkBotao>
+          )}
         </div>
       </Cartao>
 
@@ -254,7 +258,8 @@ function AcessosPortal({ cliente }: { cliente: Cliente }) {
   const [email, setEmail] = useState(cliente.email ?? '');
   const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso'; texto: string; convidado?: string } | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const gestor = perfil?.papel === 'gestor';
+  // Gestor e administrativo dão, bloqueiam e reenviam o acesso ao portal.
+  const gestor = pode(perfil, 'acessoPortal');
   const zap = cliente.whatsapp || cliente.telefone;
 
   async function dar(e: FormEvent) {
@@ -336,7 +341,7 @@ function AcessosPortal({ cliente }: { cliente: Cliente }) {
           </Botao>
         </form>
       ) : (
-        <p className="pequeno">Somente o gestor libera acessos.</p>
+        <p className="pequeno">O acesso ao portal é liberado pelo gestor ou pelo administrativo.</p>
       )}
     </Cartao>
   );

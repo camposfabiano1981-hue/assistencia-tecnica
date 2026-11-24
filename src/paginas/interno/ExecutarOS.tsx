@@ -1,7 +1,8 @@
 // Execução da OS no celular do técnico. Funciona sem internet: tudo é salvo no aparelho e sincroniza depois.
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { useSessao } from '../../sessao';
+import { usePode, useSessao } from '../../sessao';
+import { pode } from '../../acessos';
 import { mensagemErro, useDocumento } from '../../dados/hooks';
 import { adicionarFotoOS, concluirOS, iniciarOS, removerFotoOS, salvarOS } from '../../dados/operacoes';
 import type { Avaliacao, Cliente, Fatura, Instrumento, InstrumentoUsado, Orcamento, OrdemServico, Peca, ResultadoItem, ServicoCatalogo, ServicoUsado } from '../../tipos';
@@ -34,7 +35,8 @@ export function ExecutarOS() {
   if (carregando) return <Carregando />;
   if (erro || !os) return <Vazio titulo="OS não encontrada">{erro ? mensagemErro(erro) : 'Ela pode não ter sido baixada para este aparelho.'}</Vazio>;
   const concluida = os.status === 'concluida';
-  const editavel = !concluida && (perfil?.papel === 'gestor' || os.tecnicoId === perfil?.id);
+  const editavel = !concluida && (pode(perfil, 'todasOS') || os.tecnicoId === perfil?.id);
+  const financeiro = pode(perfil, 'financeiro');
   const zap = cliente.dados?.whatsapp || cliente.dados?.telefone;
 
   return (
@@ -68,7 +70,7 @@ export function ExecutarOS() {
               <Link to={`/interno/chamados/${os.chamadoId}`}>nº {os.chamadoId}</Link>
             </Info>
           )}
-          <VinculosOS os={os} />
+          {financeiro && <VinculosOS os={os} />}
           {os.inicioEm && <Info rotulo="Início">{fmtDataHora(os.inicioEm)}</Info>}
         </dl>
         {os.relato && <p className="relato" style={{ marginTop: 12 }}>{os.relato}</p>}
@@ -125,9 +127,11 @@ export function ExecutarOS() {
       {!concluida && (
         <div className="acoes-coluna">
           <BotaoVisualizarLaudo os={os} rotulo="Visualizar OS (rascunho)" bloco />
-          <LinkBotao para={`/interno/orcamentos/novo?os=${os.id}`} variante="secundario" icone="moeda" bloco>
-            Fazer orçamento desta OS
-          </LinkBotao>
+          {financeiro && (
+            <LinkBotao para={`/interno/orcamentos/novo?os=${os.id}`} variante="secundario" icone="moeda" bloco>
+              Fazer orçamento desta OS
+            </LinkBotao>
+          )}
         </div>
       )}
     </>
@@ -446,8 +450,8 @@ function Pecas({ os, editavel }: { os: OrdemServico; editavel: boolean }) {
         </div>
       ))}
       {editavel && !!estoque.itens.length && (
-        <select className="seletor-acao" style={{ width: '100%', marginBottom: 8 }} aria-label="Peça do estoque" value={pecaId} onChange={(e) => setPecaId(e.target.value)}>
-          <option value="">Peça do estoque (ou digite abaixo uma avulsa)…</option>
+        <select className="seletor-acao" style={{ width: '100%', marginBottom: 8 }} aria-label="Peça cadastrada" value={pecaId} onChange={(e) => setPecaId(e.target.value)}>
+          <option value="">Peça cadastrada (ou digite abaixo uma avulsa)…</option>
           {estoque.itens
             .filter((x) => x.ativo !== false)
             .map((x) => (
@@ -532,6 +536,7 @@ function Conclusao({ os }: { os: OrdemServico }) {
 
 function Concluida({ os, zap }: { os: OrdemServico; zap?: string }) {
   const avaliacao = useDocumento<Avaliacao>(`avaliacoes/${os.id}`);
+  const financeiro = usePode('financeiro');
   return (
     <Cartao titulo="OS concluída" className="cartao-destaque">
       <p style={{ marginTop: 0 }}>
@@ -557,9 +562,11 @@ function Concluida({ os, zap }: { os: OrdemServico; zap?: string }) {
       <div className="acoes-coluna">
         <BotaoVisualizarLaudo os={os} rotulo="Visualizar laudo" bloco />
         <BotaoLaudo os={os} rotulo="Gerar laudo e enviar" bloco />
-        <LinkBotao para={`/interno/faturas/nova?os=${os.id}`} variante="secundario" icone="moeda" bloco>
-          Faturar esta OS
-        </LinkBotao>
+        {financeiro && (
+          <LinkBotao para={`/interno/faturas/nova?os=${os.id}`} variante="secundario" icone="moeda" bloco>
+            Faturar esta OS
+          </LinkBotao>
+        )}
         {zap && (
           <Botao
             variante="whatsapp"

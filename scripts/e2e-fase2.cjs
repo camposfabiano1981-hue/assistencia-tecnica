@@ -261,7 +261,7 @@ const paginas = [];
   // Serviço da tabela (com preço), peça do estoque e uma linha avulsa deixada em branco (não deve ir para o documento).
   const seletorServico = g.getByLabel('Adicionar serviço cadastrado');
   await seletorServico.selectOption(await seletorServico.locator('option', { hasText: 'Troca de guarnição' }).getAttribute('value'));
-  await g.getByLabel('Adicionar peça do estoque').selectOption({ index: 1 });
+  await g.getByLabel('Adicionar peça cadastrada').selectOption({ index: 1 });
   await g.locator('.item-valor').nth(1).getByText('cód. GU-21').waitFor();
   await g.getByRole('button', { name: 'Serviço avulso' }).click();
   await g.locator('.item-valor').nth(2).waitFor();
@@ -339,7 +339,7 @@ const paginas = [];
   await t.getByLabel('Descrição do serviço').fill('Limpeza do filtro de ar');
   await t.getByRole('button', { name: 'Incluir serviço' }).click();
   await t.getByText('1 × Limpeza do filtro de ar').waitFor();
-  await t.getByLabel('Peça do estoque').selectOption({ index: 1 });
+  await t.getByLabel('Peça cadastrada').selectOption({ index: 1 });
   await t.getByLabel('Quantidade', { exact: true }).fill('1');
   await t.getByRole('button', { name: 'Incluir peça' }).click();
   await t.getByText('1 × Guarnição da porta 21 L').waitFor();

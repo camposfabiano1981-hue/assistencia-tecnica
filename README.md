@@ -42,6 +42,23 @@ no momento do atendimento, então não muda se o cadastro for alterado depois.
 | **Pasta da VISA** | No portal, o cliente vê a situação de cada equipamento (preventivas e exigências), o último laudo e os documentos da sua empresa. O dossiê em PDF reúne inventário, plano de manutenção, histórico de 24 meses com o código de cada laudo e os instrumentos RBC usados. |
 | **Contratos de manutenção** | Valor fixo por mês ou por equipamento, peças incluídas ou não, prazo de atendimento, preventivas, vigência e reajuste. As faturas do mês saem com um toque, o chamado mostra o prazo do contrato e o indicador mostra se foi cumprido. O PDF do contrato é um modelo de referência. |
 
+## Menu, tela inicial e níveis de acesso
+
+| Recurso | O que faz |
+|---|---|
+| **Menu lateral** | Menu vertical à esquerda, com submenus: Atendimento, Financeiro, Cadastros, Relatórios e Administração. No computador ele fica sempre à vista; no celular abre pelo botão ☰. Cada pessoa vê só o que o seu nível permite. O portal do cliente usa o mesmo menu, com **Abrir chamado** em destaque. |
+| **Tela inicial com indicadores** | Novos chamados, atendimentos do dia, faturado no mês (com a variação sobre o mês anterior), a receber e vencido, orçamentos com o cliente, preventivas em 30 dias, satisfação e contratos a faturar. Traz também os gráficos de chamados e de faturamento dos últimos 6 meses, a agenda, os chamados novos e o quadro Atenção. Cada número abre a lista correspondente. |
+| **Níveis de acesso** | Todos entram pela mesma tela de login, e o app abre só o que o nível da pessoa permite (tabela abaixo). As regras do banco aplicam as mesmas travas no servidor. |
+| **Vários gestores** | Em **Administração → Equipe e acessos** você cadastra a pessoa e escolhe o nível. Também pode mudar o nível ou bloquear alguém depois. Ninguém muda o próprio nível nem bloqueia a si mesmo, por isso sempre sobra ao menos um gestor. |
+| **Peças e estoque** | Cadastro de peças no mesmo padrão da tabela de serviços. Traz sugestões de peças comuns (fusível, lâmpada do refletor, rolamento e rotor de alta rotação, vedação e resistência da autoclave, sensor de SpO2, manguito…). Cada peça tem unidade, preço, custo, mínimo, NCM, fabricante e aplicação, e fica disponível para escolher no orçamento, na fatura e na OS. |
+
+| Nível | Pode | Não pode |
+|---|---|---|
+| **Gestor** | Tudo: configurações, equipe e níveis de acesso, tipos e checklists, excluir cadastros, cópia de segurança. | Rebaixar ou bloquear a si mesmo (outro gestor pode). |
+| **Administrativo** | Chamados, agenda e OS de todos; clientes e acesso deles ao portal; orçamentos, faturas e contratos; preços de serviços e peças; indicadores e planilhas do contador. | Configurações, equipe, excluir cadastros, cópia de segurança. |
+| **Técnico** | Chamados e as OS dele (checklist, fotos, assinatura, laudo); clientes e equipamentos; consultar peças e dar baixa no estoque; instrumentos, vencimentos e indicadores de atendimento. | Orçamentos, faturas, contratos e valores; alterar preços; configurações e equipe. |
+| **Cliente** | No portal: abrir e acompanhar chamados, equipamentos, laudos e Pasta da VISA, aprovar orçamentos e ver faturas. | Ver dados de outros clientes. |
+
 ## Publicar pela primeira vez
 
 ### 1. Criar o projeto no Firebase
@@ -85,11 +102,13 @@ prévia usa o mesmo banco de dados do sistema oficial.
 Abra `https://SEU-PROJETO.web.app` → **Configure a empresa e crie a conta do gestor**. Quem fizer esse
 passo vira o gestor; depois disso a instalação trava. Em seguida:
 
-1. **Mais → Configurações**: dados da empresa, logo, responsável técnico (aparecem no laudo).
-2. **Clientes → Novo** → cadastre o cliente → **Dar acesso ao portal**. A pessoa recebe um e-mail para
-   criar a senha.
-3. Cadastre os equipamentos e imprima as **etiquetas QR** (papel adesivo A4).
-4. Revise os **tipos e checklists**. São um ponto de partida: ajuste itens e limites conforme os
+1. **Administração → Configurações**: dados da empresa, logo, responsável técnico (aparecem no laudo).
+2. **Administração → Equipe e acessos**: cadastre cada pessoa da equipe com o nível dela (gestor,
+   administrativo ou técnico). Ela recebe um e-mail para criar a senha.
+3. **Cadastros → Clientes → Novo** → cadastre o cliente → **Dar acesso ao portal**. A pessoa recebe um
+   e-mail para criar a senha.
+4. Cadastre os equipamentos e imprima as **etiquetas QR** (papel adesivo A4).
+5. Revise os **tipos e checklists**. São um ponto de partida: ajuste itens e limites conforme os
    manuais e a sua prática.
 
 ### 5. Aviso de chamado por e-mail
@@ -102,24 +121,25 @@ No Chrome, abra o endereço → menu ⋮ → **Instalar app** (ou "Adicionar à 
 
 ## Começar a usar a Fase 2
 
-1. **Mais → Configurações → Pix e orçamento**: tipo e chave Pix, nome (até 25 letras) e cidade (até
+1. **Administração → Configurações → Pix e orçamento**: tipo e chave Pix, nome (até 25 letras) e cidade (até
    15) do recebedor, e os textos padrão do orçamento. Toque em **Testar Pix (R$ 1,00)** e leia o QR no
    app do seu banco: devem aparecer o seu nome e a sua chave. Não precisa concluir o pagamento.
-2. **Mais → Tipos e checklists**: confira em cada tipo a periodicidade da preventiva e as exigências
+2. **Cadastros → Tipos e checklists**: confira em cada tipo a periodicidade da preventiva e as exigências
    periódicas. O botão **Incluir sugestões** traz as mais comuns; ajuste ao que a vigilância sanitária
    local cobra.
-3. **Mais → Serviços e preços**: toque em **Incluir serviços sugeridos** e defina o preço de cada um,
+3. **Cadastros → Serviços e preços**: toque em **Incluir serviços sugeridos** e defina o preço de cada um,
    ou cadastre os seus. Serviço com valor diferente a cada vez continua podendo entrar como avulso.
-4. **Mais → Instrumentos**: cadastre os instrumentos com número do certificado e validade.
-5. **Mais → Estoque**: cadastre as peças que você costuma usar, com o saldo inicial.
+4. **Cadastros → Instrumentos**: cadastre os instrumentos com número do certificado e validade.
+5. **Cadastros → Peças e estoque**: toque em **Incluir peças comuns** e complete preço, mínimo e saldo,
+   ou cadastre as suas. Peça usada só uma vez continua podendo entrar como avulsa.
 6. Para equipamentos atendidos antes do sistema, lance o próximo vencimento em **Definir data**, na
    ficha do equipamento. **Vencimentos → Verificar** mostra quem ainda está sem data.
 
 ## Começar a usar a Fase 3
 
-1. **Mais → Configurações → Documentos para a Pasta da VISA**: cadastre cartão CNPJ, alvará, registro do
+1. **Administração → Configurações → Documentos para a Pasta da VISA**: cadastre cartão CNPJ, alvará, registro do
    responsável técnico (CFT/CREA) etc., com número, validade e o link do arquivo no Google Drive.
-2. **Mais → Contratos → Novo**: escolha o cliente, marque os equipamentos cobertos e defina valor, prazo de
+2. **Financeiro → Contratos → Novo**: escolha o cliente, marque os equipamentos cobertos e defina valor, prazo de
    atendimento e vencimento. Revise o texto do PDF com o seu advogado antes de assinar.
 3. Todo mês, o painel avisa os **contratos a faturar**: em **Contratos**, toque no botão que gera as faturas
    do mês (uma por contrato, com Pix e vencimento no dia combinado).
@@ -142,7 +162,7 @@ O caminho é este:
 ## Backup e restauração
 
 O plano gratuito não faz backup automático do banco, então a cópia é manual:
-**Mais → Backup e exportação → Baixar cópia de segurança**. O arquivo `.json` traz todos os dados,
+**Relatórios → Planilhas e backup → Baixar cópia de segurança**. O arquivo `.json` traz todos os dados,
 inclusive as assinaturas. Marque **Incluir as fotos** quando quiser a cópia completa (fica maior).
 Guarde fora do celular, em pasta com senha: o arquivo tem dados pessoais de clientes (LGPD).
 
@@ -187,17 +207,19 @@ Requisitos: Node 22 e Java 21 (para o emulador).
 npm install
 npm run emuladores        # Auth + Firestore locais (porta 9099 e 8080)
 npm run dev               # app em http://localhost:5173 usando os emuladores
-npm run test:unidade      # Pix (BR Code), planilhas, datas e formato do backup
+npm run test:unidade      # Pix (BR Code), planilhas, datas, backup, níveis de acesso, indicadores, peças
 npm run test:regras       # testes das regras de segurança
 npm run build             # compilação de produção
 ```
 
-Com os emuladores e o `dev` rodando, `npm run e2e` apaga os dados dos emuladores e percorre as duas
+Com os emuladores e o `dev` rodando, `npm run e2e` apaga os dados dos emuladores e percorre todas as
 fases. Na Fase 1: instalação, cliente, chamado pelo celular, OS assinada e laudo. Na Fase 2: Pix,
 orçamento aprovado no portal, OS com instrumento, peça do estoque e exigências, fatura paga com NFS-e,
 vencimentos, indicadores, backup e restauração em outro projeto do emulador. Na Fase 3: documentos da
 empresa, conferência pública do laudo, avaliação, contrato com fatura do mês e prazo de atendimento, Pasta
-da VISA e dossiê. As capturas de tela ficam em `capturas/`. Requer o Playwright instalado globalmente e `npm install` em `ferramentas/restaurar`.
+da VISA e dossiê. Por último: menu lateral e submenus, tela inicial com indicadores, peças sugeridas,
+equipe com dois gestores, um administrativo e um técnico (o que cada um vê e o que fica bloqueado) e o menu
+do portal no celular. As capturas de tela ficam em `capturas/`. Requer o Playwright instalado globalmente e `npm install` em `ferramentas/restaurar`.
 
 ## Estrutura
 
@@ -205,11 +227,14 @@ da VISA e dossiê. As capturas de tela ficam em `capturas/`. Requer o Playwright
 firestore.rules            regras de segurança (única barreira: não há servidor)
 tests/regras.test.ts       testes das regras no emulador
 src/firebase.ts            inicialização (produção lê /__/firebase/init.json; dev usa emulador)
-src/sessao.tsx             usuário logado, papel e dados da empresa
+src/sessao.tsx             usuário logado, nível de acesso e dados da empresa
+src/acessos.ts             níveis de acesso: o que cada nível vê e faz (espelho das regras)
 src/dados/operacoes.ts     criar chamado/OS (numeração sequencial), concluir, acessos
 src/dados/financeiro.ts    orçamentos, faturas, pagamentos e notas
 src/dados/vencimentos.ts   preventivas e exigências periódicas
 src/dados/estoque.ts       movimentos de estoque
+src/dados/pecas.ts         cadastro de peças: unidades e sugestões
+src/dados/indicadores.ts   contas dos indicadores (meses, séries, variação)
 src/dados/backup.ts        cópia de segurança (JSON)
 src/dados/exportar.ts      planilhas CSV
 src/util/pix.ts            Pix copia e cola (BR Code com CRC16)
@@ -217,7 +242,8 @@ src/util/laudo.ts          laudo PDF (jsPDF), carregado só quando usado
 src/util/documentos.ts     PDFs de orçamento e fatura
 src/util/imagem.ts         compressão de fotos no aparelho
 src/paginas/portal/        portal do cliente
-src/paginas/interno/       painel, chamados, OS, cadastros, configurações
+src/componentes/MenuLateral.tsx  menu vertical com submenus (gaveta no celular)
+src/paginas/interno/       tela inicial, chamados, OS, cadastros, financeiro, equipe e acessos
 apps-script/               aviso por e-mail (Google Apps Script)
 ferramentas/restaurar/     restauração do backup (firebase-admin)
 scripts/                   testes ponta a ponta e geração de ícones
@@ -226,8 +252,10 @@ scripts/                   testes ponta a ponta e geração de ícones
 
 ## Segurança e LGPD
 
-- **Acesso por papel.** Gestor, técnico e cliente. O cliente só enxerga o próprio cadastro, os
-  próprios equipamentos e chamados, e apenas as OS **concluídas** dele.
+- **Acesso por nível.** Gestor, administrativo, técnico e cliente. O cliente só enxerga o próprio
+  cadastro, os próprios equipamentos e chamados, e apenas as OS **concluídas** dele. O técnico não lê
+  orçamentos, faturas, contratos nem preços. Isso vale nas regras do banco, não só nas telas. Só o gestor
+  muda configurações e níveis de acesso, e ninguém muda o próprio nível.
 - **Conta sem perfil não vê nada.** Uma conta criada fora do sistema não tem perfil liberado pelo
   gestor e por isso não acessa nenhum dado.
 - **Numeração protegida.** Chamados e OS são sequenciais, e as regras impedem pular ou forjar números.

@@ -1,12 +1,13 @@
 // Vencimentos (preventivas e exigências), instrumentos de medição e estoque de peças.
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { Timestamp, addDoc, collection, doc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { Timestamp, addDoc, collection, deleteDoc, doc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { useSessao } from '../../sessao';
+import { usePode, useSessao } from '../../sessao';
 import { mensagemErro, useConsulta, useDocumento } from '../../dados/hooks';
 import { exigenciasDoTipo, menorVencimento, salvarVencimentos, situacao, type Situacao } from '../../dados/vencimentos';
 import { movimentarEstoque } from '../../dados/estoque';
+import { UNIDADES_PECA, incluirPecasSugeridas, pecasQueFaltam } from '../../dados/pecas';
 import type { Cliente, Equipamento, Instrumento, MovimentoEstoque, Peca, TipoEquipamento, Vencimento } from '../../tipos';
 import { descreverEquipamento, fmtData, fmtDataHora, fmtMoeda, normalizar, type Tom } from '../../util/formato';
 import { deInputData, diasAte, paraInputData, somarDias } from '../../util/datas';
@@ -198,7 +199,7 @@ export function Vencimentos() {
 
   return (
     <>
-      <CabecalhoPagina titulo="Vencimentos" subtitulo="Preventivas e exigências dos próximos 60 dias" voltar="/interno/mais" />
+      <CabecalhoPagina titulo="Vencimentos" subtitulo="Preventivas e exigências dos próximos 60 dias" />
       {due.erro && <Aviso tom="erro">{mensagemErro(due.erro)}</Aviso>}
       {due.carregando ? (
         <Carregando />
@@ -284,7 +285,6 @@ export function ListaInstrumentos() {
       <CabecalhoPagina
         titulo="Instrumentos"
         subtitulo="Analisadores e padrões com certificado de calibração"
-        voltar="/interno/mais"
         acoes={<LinkBotao para="/interno/instrumentos/novo" icone="mais_circulo">Novo</LinkBotao>}
       />
       <Aviso tom="info">
@@ -404,15 +404,39 @@ export function InstrumentoEditar() {
 // ======================= Estoque =======================
 
 export function ListaEstoque() {
+  const podeAlterar = usePode('financeiro');
   const { itens, carregando, erro } = useConsulta<Peca>(() => query(collection(db, 'pecas'), orderBy('descricao')), []);
   const [busca, setBusca] = useState('');
+  const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso'; texto: string } | null>(null);
+  const [incluindo, setIncluindo] = useState(false);
   const termo = normalizar(busca);
-  const lista = itens.filter((p) => normalizar(`${p.descricao} ${p.codigo ?? ''}`).includes(termo));
-  const abaixo = itens.filter((p) => p.ativo !== false && p.quantidade <= p.minimo);
+  const lista = itens.filter((p) => normalizar(`${p.descricao} ${p.codigo ?? ''} ${p.fabricante ?? ''} ${p.aplicacao ?? ''}`).includes(termo));
+  const abaixo = itens.filter((p) => p.ativo !== false && p.quantidade <= p.minimo && p.minimo > 0);
   const valor = itens.reduce((t, p) => t + Math.max(0, p.quantidade) * (p.custo || 0), 0);
+  const faltamSugestoes = pecasQueFaltam(itens).length;
+
+  async function sugerir() {
+    setMsg(null);
+    setIncluindo(true);
+    try {
+      const n = await incluirPecasSugeridas(itens);
+      setMsg({ tom: 'sucesso', texto: n ? `${n} peça(s) incluída(s). Toque em cada uma para definir preço, mínimo e saldo.` : 'As sugestões já estão na lista.' });
+    } catch (e) {
+      setMsg({ tom: 'erro', texto: mensagemErro(e) });
+    } finally {
+      setIncluindo(false);
+    }
+  }
+
   return (
     <>
-      <CabecalhoPagina titulo="Estoque" voltar="/interno/mais" acoes={<LinkBotao para="/interno/estoque/nova" icone="mais_circulo">Nova peça</LinkBotao>} />
+      <CabecalhoPagina
+        titulo="Peças e estoque"
+        subtitulo="Escolha estas peças no orçamento, na fatura e na OS; a conclusão da OS dá baixa no saldo"
+        acoes={podeAlterar && <LinkBotao para="/interno/estoque/nova" icone="mais_circulo">Nova peça</LinkBotao>}
+      />
+      {msg && <Aviso tom={msg.tom}>{msg.texto}</Aviso>}
+      {!podeAlterar && <Aviso tom="info">O cadastro e os preços são feitos pelo gestor ou pelo administrativo. Você registra entradas, saídas e ajustes de saldo.</Aviso>}
       <div className="resumo">
         <div className="resumo-item">
           <strong className="numero">{itens.length}</strong>
@@ -422,63 +446,133 @@ export function ListaEstoque() {
           <strong className="numero">{abaixo.length}</strong>
           <span>No mínimo ou abaixo</span>
         </div>
-        <div className="resumo-item">
-          <strong className="numero">{fmtMoeda(valor)}</strong>
-          <span>Valor em estoque (custo)</span>
-        </div>
-      </div>
-      <div className="busca">
-        <input type="search" placeholder="Buscar por descrição ou código" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        {podeAlterar && (
+          <div className="resumo-item">
+            <strong className="numero">{fmtMoeda(valor)}</strong>
+            <span>Valor em estoque (custo)</span>
+          </div>
+        )}
       </div>
       {erro && <Aviso tom="erro">{mensagemErro(erro)}</Aviso>}
       {carregando ? (
         <Carregando />
-      ) : !lista.length ? (
-        <Vazio icone="caixa" titulo="Nenhuma peça">Cadastre as peças que você costuma usar: a OS dá baixa sozinha e o orçamento puxa o preço.</Vazio>
+      ) : !itens.length ? (
+        <Vazio icone="caixa" titulo="Nenhuma peça cadastrada">
+          Cadastre as peças que você costuma usar, com o preço de venda: elas aparecem para escolher no orçamento, na fatura e na OS,
+          e a OS concluída dá baixa no estoque. Peças usadas só uma vez continuam podendo ser lançadas como avulsas.
+          {podeAlterar && (
+            <div className="acoes" style={{ justifyContent: 'center' }}>
+              <Botao variante="secundario" carregando={incluindo} onClick={() => void sugerir()}>
+                Incluir peças comuns
+              </Botao>
+            </div>
+          )}
+        </Vazio>
       ) : (
-        <div className="lista">
-          {lista.map((p) => (
-            <LinhaLista
-              key={p.id}
-              para={`/interno/estoque/${p.id}`}
-              titulo={p.descricao}
-              detalhe={[p.codigo && `cód. ${p.codigo}`, `venda ${fmtMoeda(p.preco)}`].filter(Boolean).join(' · ')}
-              lateral={
-                <>
-                  <strong className="numero">
-                    {String(p.quantidade).replace('.', ',')} {p.unidade}
-                  </strong>
-                  {p.ativo !== false && p.quantidade <= p.minimo && <Selo tom="alerta">Repor</Selo>}
-                </>
-              }
-            />
-          ))}
-        </div>
+        <>
+          <div className="busca">
+            <input type="search" aria-label="Buscar peça" placeholder="Buscar por descrição, código, fabricante ou equipamento" value={busca} onChange={(e) => setBusca(e.target.value)} />
+          </div>
+          {!lista.length ? (
+            <p className="pequeno">Nenhuma peça encontrada para "{busca}".</p>
+          ) : (
+            <div className="lista">
+              {lista.map((p) => (
+                <LinhaLista
+                  key={p.id}
+                  para={`/interno/estoque/${p.id}`}
+                  titulo={p.descricao}
+                  detalhe={[p.codigo && `cód. ${p.codigo}`, p.fabricante, `venda ${fmtMoeda(p.preco)}/${p.unidade}`].filter(Boolean).join(' · ')}
+                  lateral={
+                    <>
+                      <strong className="numero">
+                        {String(p.quantidade).replace('.', ',')} {p.unidade}
+                      </strong>
+                      {p.ativo === false ? (
+                        <Selo>Inativa</Selo>
+                      ) : !p.preco ? (
+                        <Selo tom="alerta">Sem preço</Selo>
+                      ) : (
+                        p.minimo > 0 && p.quantidade <= p.minimo && <Selo tom="alerta">Repor</Selo>
+                      )}
+                    </>
+                  }
+                />
+              ))}
+            </div>
+          )}
+          {podeAlterar && faltamSugestoes > 0 && (
+            <div className="acoes">
+              <Botao variante="fantasma" carregando={incluindo} onClick={() => void sugerir()}>
+                Incluir peças comuns que faltam
+              </Botao>
+            </div>
+          )}
+        </>
       )}
     </>
   );
 }
+
+type FormPeca = {
+  codigo: string;
+  descricao: string;
+  unidade: string;
+  fabricante: string;
+  aplicacao: string;
+  minimo: number;
+  custo: number;
+  preco: number;
+  ncm: string;
+  ativo: boolean;
+  quantidadeInicial: number;
+};
 
 export function PecaDetalhe() {
   const { id = 'nova' } = useParams();
   const nova = id === 'nova';
   const navegar = useNavigate();
   const { perfil } = useSessao();
+  const podeAlterar = usePode('financeiro');
+  const podeExcluir = usePode('excluir');
   const existente = useDocumento<Peca>(nova ? null : `pecas/${id}`);
   const movimentos = useConsulta<MovimentoEstoque>(
     () => (nova ? null : query(collection(db, 'pecas', id, 'movimentos'), orderBy('em', 'desc'), limit(50))),
     [id],
   );
-  const [f, setF] = useState<{ codigo: string; descricao: string; unidade: string; minimo: number; custo: number; preco: number; ncm: string; ativo: boolean; quantidadeInicial: number } | null>(
-    nova ? { codigo: '', descricao: '', unidade: 'un', minimo: 1, custo: 0, preco: 0, ncm: '', ativo: true, quantidadeInicial: 0 } : null,
+  const [f, setF] = useState<FormPeca | null>(
+    nova ? { codigo: '', descricao: '', unidade: 'un', fabricante: '', aplicacao: '', minimo: 1, custo: 0, preco: 0, ncm: '', ativo: true, quantidadeInicial: 0 } : null,
   );
   const [mov, setMov] = useState<{ tipo: 'entrada' | 'saida' | 'ajuste'; quantidade: number; obs: string }>({ tipo: 'entrada', quantidade: 1, obs: '' });
   const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso'; texto: string } | null>(null);
+  const [salvando, setSalvando] = useState(false);
 
   if (!nova && !f && existente.dados) {
     const p = existente.dados;
-    setF({ codigo: p.codigo ?? '', descricao: p.descricao, unidade: p.unidade, minimo: p.minimo, custo: p.custo, preco: p.preco, ncm: p.ncm ?? '', ativo: p.ativo !== false, quantidadeInicial: 0 });
+    setF({
+      codigo: p.codigo ?? '',
+      descricao: p.descricao,
+      unidade: p.unidade || 'un',
+      fabricante: p.fabricante ?? '',
+      aplicacao: p.aplicacao ?? '',
+      minimo: p.minimo ?? 0,
+      custo: p.custo ?? 0,
+      preco: p.preco ?? 0,
+      ncm: p.ncm ?? '',
+      ativo: p.ativo !== false,
+      quantidadeInicial: 0,
+    });
   }
+  if (nova && !podeAlterar) {
+    return (
+      <>
+        <CabecalhoPagina titulo="Nova peça" voltar="/interno/estoque" />
+        <Aviso tom="alerta">O cadastro de peças é feito pelo gestor ou pelo administrativo.</Aviso>
+      </>
+    );
+  }
+  if (!nova && existente.carregando) return <Carregando />;
+  if (!nova && !existente.dados) return <Vazio titulo="Peça não encontrada" />;
   if (!f) return <Carregando />;
   const p = existente.dados;
 
@@ -486,16 +580,22 @@ export function PecaDetalhe() {
     e.preventDefault();
     if (!f) return;
     setMsg(null);
+    const descricao = f.descricao.trim();
+    if (!descricao) return setMsg({ tom: 'erro', texto: 'Informe a descrição.' });
+    if (f.preco < 0 || f.custo < 0 || f.minimo < 0) return setMsg({ tom: 'erro', texto: 'Preço, custo e mínimo não podem ser negativos.' });
     const dados = {
       codigo: f.codigo.trim(),
-      descricao: f.descricao.trim(),
+      descricao,
       unidade: f.unidade.trim() || 'un',
+      fabricante: f.fabricante.trim(),
+      aplicacao: f.aplicacao.trim(),
       minimo: f.minimo,
       custo: f.custo,
       preco: f.preco,
       ncm: f.ncm.trim(),
       ativo: f.ativo,
     };
+    setSalvando(true);
     try {
       if (nova) {
         const ref = await addDoc(collection(db, 'pecas'), { ...dados, quantidade: 0, criadoEm: serverTimestamp() });
@@ -507,6 +607,8 @@ export function PecaDetalhe() {
       }
     } catch (err) {
       setMsg({ tom: 'erro', texto: mensagemErro(err) });
+    } finally {
+      setSalvando(false);
     }
   }
 
@@ -522,43 +624,77 @@ export function PecaDetalhe() {
     }
   }
 
+  async function excluir() {
+    if (!window.confirm('Excluir esta peça do cadastro? Orçamentos, faturas e OS já feitos não mudam.')) return;
+    try {
+      await deleteDoc(doc(db, 'pecas', id));
+      navegar('/interno/estoque', { replace: true });
+    } catch (err) {
+      setMsg({ tom: 'erro', texto: mensagemErro(err) });
+    }
+  }
+
   return (
     <>
       <CabecalhoPagina titulo={nova ? 'Nova peça' : f.descricao} subtitulo={p ? `Saldo: ${String(p.quantidade).replace('.', ',')} ${p.unidade}` : undefined} voltar="/interno/estoque" />
       {msg && <Aviso tom={msg.tom}>{msg.texto}</Aviso>}
+      {!podeAlterar && <Aviso tom="info">Só para consulta: o gestor ou o administrativo altera o cadastro e os preços. Abaixo você registra entradas, saídas e ajustes.</Aviso>}
       <form onSubmit={salvar}>
         <Cartao>
-          <Campo rotulo="Descrição" required value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} />
-          <div className="grade grade-3">
-            <Campo rotulo="Código" value={f.codigo} onChange={(e) => setF({ ...f, codigo: e.target.value })} />
-            <Campo rotulo="Unidade" value={f.unidade} onChange={(e) => setF({ ...f, unidade: e.target.value })} placeholder="un, m, kit" />
-            <Campo rotulo="NCM (para a NF-e)" value={f.ncm} onChange={(e) => setF({ ...f, ncm: e.target.value })} inputMode="numeric" />
-          </div>
-          <div className="grade grade-3">
-            <div className="campo">
-              <span className="campo-rotulo">Estoque mínimo</span>
-              <CampoNumero rotulo="Estoque mínimo" casas={null} className="campo-valor" valor={f.minimo} aoMudar={(n) => setF({ ...f, minimo: n })} />
+          <fieldset className="fieldset-limpo" disabled={!podeAlterar}>
+            <Campo rotulo="Descrição" required value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} placeholder="Ex.: Borracha de vedação da porta da autoclave 21 L" />
+            <div className="grade grade-3">
+              <Campo rotulo="Código" value={f.codigo} onChange={(e) => setF({ ...f, codigo: e.target.value })} />
+              <Campo rotulo="Unidade" list="unidades-peca" value={f.unidade} onChange={(e) => setF({ ...f, unidade: e.target.value })} ajuda="Ex.: un, kit, m, par" />
+              <Campo rotulo="NCM (para a NF-e)" value={f.ncm} onChange={(e) => setF({ ...f, ncm: e.target.value })} inputMode="numeric" />
             </div>
-            <div className="campo">
-              <span className="campo-rotulo">Custo (R$)</span>
-              <CampoNumero rotulo="Custo" className="campo-valor" valor={f.custo} aoMudar={(n) => setF({ ...f, custo: n })} />
+            <datalist id="unidades-peca">
+              {UNIDADES_PECA.map((u) => (
+                <option key={u} value={u} />
+              ))}
+            </datalist>
+            <div className="grade grade-2">
+              <Campo rotulo="Fabricante ou marca" value={f.fabricante} onChange={(e) => setF({ ...f, fabricante: e.target.value })} />
+              <Campo
+                rotulo="Aplicação (equipamentos em que serve)"
+                value={f.aplicacao}
+                onChange={(e) => setF({ ...f, aplicacao: e.target.value })}
+                placeholder="Ex.: Autoclave Cristófoli Vitale 21 L"
+              />
             </div>
-            <div className="campo">
-              <span className="campo-rotulo">Preço de venda (R$)</span>
-              <CampoNumero rotulo="Preço de venda" className="campo-valor" valor={f.preco} aoMudar={(n) => setF({ ...f, preco: n })} />
+            <div className="grade grade-3">
+              <div className="campo">
+                <span className="campo-rotulo">Estoque mínimo</span>
+                <CampoNumero rotulo="Estoque mínimo" casas={null} className="campo-valor" valor={f.minimo} aoMudar={(n) => setF({ ...f, minimo: n })} />
+              </div>
+              <div className="campo">
+                <span className="campo-rotulo">Custo (R$)</span>
+                <CampoNumero rotulo="Custo" className="campo-valor" valor={f.custo} aoMudar={(n) => setF({ ...f, custo: n })} />
+              </div>
+              <div className="campo">
+                <span className="campo-rotulo">Preço de venda (R$)</span>
+                <CampoNumero rotulo="Preço de venda" className="campo-valor" valor={f.preco} aoMudar={(n) => setF({ ...f, preco: n })} />
+              </div>
             </div>
-          </div>
-          {nova && (
-            <div className="campo">
-              <span className="campo-rotulo">Quantidade atual em estoque</span>
-              <CampoNumero rotulo="Quantidade inicial" casas={null} className="campo-valor" valor={f.quantidadeInicial} aoMudar={(n) => setF({ ...f, quantidadeInicial: n })} />
-            </div>
-          )}
-          <label className="marcador">
-            <input type="checkbox" checked={f.ativo} onChange={(e) => setF({ ...f, ativo: e.target.checked })} />
-            <span>Peça ativa</span>
-          </label>
-          <Botao type="submit">Salvar peça</Botao>
+            {nova && (
+              <div className="campo">
+                <span className="campo-rotulo">Quantidade atual em estoque</span>
+                <CampoNumero rotulo="Quantidade inicial" casas={null} className="campo-valor" valor={f.quantidadeInicial} aoMudar={(n) => setF({ ...f, quantidadeInicial: n })} />
+              </div>
+            )}
+            <label className="marcador">
+              <input type="checkbox" checked={f.ativo} onChange={(e) => setF({ ...f, ativo: e.target.checked })} />
+              <span>
+                Disponível para escolher
+                <span className="pequeno" style={{ display: 'block' }}>Desmarque para tirar das listas sem apagar o histórico.</span>
+              </span>
+            </label>
+            {podeAlterar && (
+              <Botao type="submit" carregando={salvando}>
+                Salvar peça
+              </Botao>
+            )}
+          </fieldset>
         </Cartao>
       </form>
       {!nova && (
@@ -600,6 +736,15 @@ export function PecaDetalhe() {
               </ol>
             )}
           </Cartao>
+          {podeExcluir && !movimentos.carregando && (
+            movimentos.itens.length ? (
+              <p className="pequeno">Esta peça tem movimentos de estoque: para tirá-la das listas, desmarque "Disponível para escolher".</p>
+            ) : (
+              <Botao type="button" variante="perigo" icone="lixo" onClick={() => void excluir()}>
+                Excluir peça
+              </Botao>
+            )
+          )}
         </>
       )}
     </>

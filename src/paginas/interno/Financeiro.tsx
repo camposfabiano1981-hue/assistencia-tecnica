@@ -1,6 +1,6 @@
 // Financeiro interno: orçamentos e faturas.
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Timestamp, collection, doc, getDoc, getDocs, getDocsFromServer, limit, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useSessao } from '../../sessao';
@@ -61,14 +61,19 @@ const FILTROS_ORC: { valor: StatusOrcamento | 'ativos' | 'todos'; rotulo: string
 ];
 const FILTROS_FAT = ['aberta', 'vencida', 'paga', 'cancelada', 'todas'] as const;
 
-export function Financeiro() {
-  const [params, setParams] = useSearchParams();
-  const aba = params.get('aba') === 'faturas' ? 'faturas' : 'orcamentos';
+/** Endereço antigo (/interno/financeiro?aba=…): leva para a lista certa. */
+export function FinanceiroAntigo() {
+  const [params] = useSearchParams();
+  return <Navigate to={params.get('aba') === 'faturas' ? '/interno/faturas' : '/interno/orcamentos'} replace />;
+}
+
+export function Financeiro({ aba }: { aba: 'orcamentos' | 'faturas' }) {
+  const navegar = useNavigate();
   return (
     <>
       <CabecalhoPagina
-        titulo="Financeiro"
-        voltar="/interno/mais"
+        titulo={aba === 'orcamentos' ? 'Orçamentos' : 'Faturas'}
+        subtitulo={aba === 'orcamentos' ? 'Propostas enviadas ao cliente, aprovadas no portal' : 'Cobranças, Pix e notas fiscais'}
         acoes={
           aba === 'orcamentos' ? (
             <LinkBotao para="/interno/orcamentos/novo" icone="mais_circulo">Novo orçamento</LinkBotao>
@@ -77,11 +82,11 @@ export function Financeiro() {
           )
         }
       />
-      <div className="filtros" role="tablist" aria-label="Seção">
-        <button type="button" role="tab" aria-pressed={aba === 'orcamentos'} onClick={() => setParams({ aba: 'orcamentos' })}>
+      <div className="filtros" role="group" aria-label="Seção do financeiro">
+        <button type="button" aria-pressed={aba === 'orcamentos'} onClick={() => navegar('/interno/orcamentos')}>
           Orçamentos
         </button>
-        <button type="button" role="tab" aria-pressed={aba === 'faturas'} onClick={() => setParams({ aba: 'faturas' })}>
+        <button type="button" aria-pressed={aba === 'faturas'} onClick={() => navegar('/interno/faturas')}>
           Faturas
         </button>
       </div>
@@ -467,7 +472,7 @@ export function OrcamentoDetalhe() {
       <CabecalhoPagina
         titulo={`Orçamento ${n5(o.numero)}`}
         subtitulo={<Link to={`/interno/clientes/${o.clienteId}`}>{o.cliente.nome}</Link>}
-        voltar="/interno/financeiro"
+        voltar="/interno/orcamentos"
         acoes={<Selo tom={tomStatusOrcamento[o.status]}>{rotuloStatusOrcamento[o.status]}</Selo>}
       />
       {msg && <Aviso tom={msg.tom}>{msg.texto}</Aviso>}
@@ -749,7 +754,7 @@ export function FaturaDetalhe() {
       <CabecalhoPagina
         titulo={`Fatura ${n5(fat.numero)}`}
         subtitulo={<Link to={`/interno/clientes/${fat.clienteId}`}>{fat.cliente.nome}</Link>}
-        voltar="/interno/financeiro?aba=faturas"
+        voltar="/interno/faturas"
         acoes={<Selo tom={tomSituacaoFatura[s]}>{rotuloSituacaoFatura[s]}</Selo>}
       />
       {msg && <Aviso tom={msg.tom}>{msg.texto}</Aviso>}

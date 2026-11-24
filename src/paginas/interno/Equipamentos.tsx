@@ -47,7 +47,6 @@ export function ListaEquipamentos() {
       <CabecalhoPagina
         titulo="Equipamentos"
         subtitulo={carregando ? undefined : `${itens.length} cadastrado(s)`}
-        voltar="/interno/mais"
         acoes={<LinkBotao para="/interno/equipamentos/novo" icone="mais_circulo">Novo</LinkBotao>}
       />
       <div className="busca">

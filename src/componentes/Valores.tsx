@@ -154,7 +154,7 @@ export function EditorItens({
           <div className="acoes" style={{ marginTop: 8 }}>
             {!!pecas.length && (
               <select
-                aria-label="Adicionar peça do estoque"
+                aria-label="Adicionar peça cadastrada"
                 className="seletor-acao"
                 value=""
                 onChange={(e) => {
@@ -162,7 +162,7 @@ export function EditorItens({
                   e.target.value = '';
                 }}
               >
-                <option value="">+ Peça do estoque…</option>
+                <option value="">+ Peça cadastrada…</option>
                 {pecas.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.descricao} — {fmtMoeda(p.preco)} ({p.quantidade} {p.unidade})
@@ -179,6 +179,11 @@ export function EditorItens({
       {!somenteLeitura && servicos && !servicos.length && (
         <p className="pequeno" style={{ marginTop: 0 }}>
           Dica: cadastre os serviços que você cobra em <Link to="/interno/servicos">Serviços e preços</Link> para escolher daqui com o preço.
+        </p>
+      )}
+      {!somenteLeitura && servicos && !pecas.length && (
+        <p className="pequeno" style={{ marginTop: 0 }}>
+          Dica: cadastre as peças que você vende em <Link to="/interno/estoque">Peças e estoque</Link> para escolher daqui com o preço.
         </p>
       )}
       <dl className="totais">
