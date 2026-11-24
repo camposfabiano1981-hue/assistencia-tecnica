@@ -1,6 +1,7 @@
 // PDFs de orçamento e fatura (carregados só quando usados).
 import QRCode from 'qrcode';
-import type { Chamado, Cliente, Empresa, Fatura, Foto, ItemValor, Orcamento } from '../tipos';
+import type { Chamado, Cliente, Contrato, Empresa, Fatura, Foto, ItemValor, Orcamento } from '../tipos';
+import { valorMensal } from '../dados/contratos';
 import type { DadosVisa } from '../dados/visa';
 import { situacaoDoEquipamento } from '../dados/visa';
 import { rotuloSituacao, situacao } from '../dados/vencimentos';
@@ -295,4 +296,82 @@ export function gerarDossieVisaPDF(d: DadosVisa, empresa: Empresa | null): File 
   }
   f.rodape(undefined, `Pasta da VISA - ${d.cliente.nome}`);
   return f.arquivo(`pasta-visa-${d.cliente.nome.normalize('NFD').replace(/[^\w]+/g, '-').toLowerCase().slice(0, 40)}.pdf`);
+}
+
+/**
+ * Contrato de manutenção (modelo de referência): partes, equipamentos cobertos, condições e assinaturas.
+ * O texto é genérico; a tela recomenda a revisão por advogado antes de assinar.
+ */
+export function gerarContratoPDF(c: Contrato, empresa: Empresa | null): File {
+  const f = new Folha();
+  f.cabecalho(empresa, ['CONTRATO DE PRESTAÇÃO DE', 'SERVIÇOS DE MANUTENÇÃO'], `Nº ${n5(c.numero)}`, `Início em ${fmtData(c.inicio)}`);
+
+  f.secao('Partes');
+  f.pares([
+    ['Contratante', c.cliente.nome],
+    ['CNPJ/CPF', c.cliente.documento],
+    ['Endereço', [c.cliente.endereco, c.cliente.cidade].filter(Boolean).join(' - ')],
+    ['Contratada', empresa?.nome],
+    ['CNPJ/CPF', empresa?.documento],
+    ['Responsável técnico', [empresa?.rtNome, empresa?.rtRegistro].filter(Boolean).join(' - ')],
+  ]);
+
+  f.secao(`Equipamentos cobertos (${c.equipamentos.length})`);
+  f.tabela({ head: [['#', 'Equipamento']], body: c.equipamentos.map((e, i) => [String(i + 1), txt(e.descricao)]), columnStyles: { 0: { cellWidth: 10 } } });
+
+  const total = valorMensal(c);
+  const preco =
+    c.cobranca === 'mensal'
+      ? `${fmtMoeda(total)} por mês`
+      : `${fmtMoeda(c.valor)} por equipamento por mês, totalizando ${fmtMoeda(total)} por mês para ${c.equipamentoIds.length} equipamento(s)`;
+  const clausulas: [string, string][] = [
+    ['1. Objeto', c.objeto],
+    [
+      '2. Atendimento',
+      `Os chamados são abertos pelo portal do cliente, pelo WhatsApp ou por telefone. A CONTRATADA inicia o atendimento em até ${c.prazoAtendimentoHoras} horas da abertura do chamado.` +
+        (c.visitasPreventivasAno > 0
+          ? ` Estão incluídas ${c.visitasPreventivasAno} visita(s) preventiva(s) por ano.`
+          : ' As manutenções preventivas seguem a periodicidade indicada para cada tipo de equipamento.'),
+    ],
+    [
+      '3. Peças',
+      c.pecasIncluidas
+        ? 'As peças de reposição necessárias à manutenção estão incluídas no valor mensal.'
+        : 'As peças de reposição não estão incluídas: são orçadas à parte e só aplicadas após a aprovação do CONTRATANTE.',
+    ],
+    ['4. Preço e pagamento', `${preco}, com vencimento todo dia ${c.diaVencimento}, mediante fatura com Pix.`],
+    ['5. Reajuste', c.reajuste || 'Não previsto.'],
+    [
+      '6. Vigência',
+      `A partir de ${fmtData(c.inicio)}${c.fim ? ` até ${fmtData(c.fim)}` : ', por prazo indeterminado'}. Qualquer das partes pode encerrar o contrato com aviso prévio de 30 dias.`,
+    ],
+    [
+      '7. Registros',
+      'Cada atendimento gera laudo técnico com código de autenticidade. Os laudos, o plano de manutenção e os vencimentos ficam disponíveis ao CONTRATANTE no portal (Pasta da VISA).',
+    ],
+    ['8. Obrigações do contratante', 'Permitir o acesso aos equipamentos, usá-los conforme o manual do fabricante e comunicar defeitos assim que observados.'],
+  ];
+  if (c.observacoes) clausulas.push(['9. Disposições adicionais', c.observacoes]);
+  f.secao('Condições');
+  for (const [rotulo, texto] of clausulas) f.paragrafo(rotulo, texto);
+
+  f.garantir(40);
+  f.secao('Assinaturas');
+  f.pdf.setFontSize(8.6);
+  f.pdf.text('Local e data: ______________________________, ____/____/________', f.M, f.y + 6);
+  f.pdf.setDrawColor(120);
+  f.pdf.setLineWidth(0.3);
+  f.pdf.line(f.M, f.y + 24, f.M + f.L / 2 - 4, f.y + 24);
+  f.pdf.line(f.M + f.L / 2 + 4, f.y + 24, 210 - f.M, f.y + 24);
+  f.pdf.setFont('helvetica', 'bold');
+  f.pdf.text(txt(c.cliente.nome), f.M, f.y + 28, { maxWidth: f.L / 2 - 4 });
+  f.pdf.text(txt(empresa?.nome || 'Contratada'), f.M + f.L / 2 + 4, f.y + 28, { maxWidth: f.L / 2 - 4 });
+  f.pdf.setFont('helvetica', 'normal');
+  f.pdf.setTextColor(...COR.suave);
+  f.pdf.text('CONTRATANTE', f.M, f.y + 32);
+  f.pdf.text('CONTRATADA', f.M + f.L / 2 + 4, f.y + 32);
+  f.pdf.setTextColor(0);
+  f.y += 36;
+  f.rodape(undefined, `Contrato nº ${n5(c.numero)}`);
+  return f.arquivo(`contrato-${n5(c.numero)}.pdf`);
 }

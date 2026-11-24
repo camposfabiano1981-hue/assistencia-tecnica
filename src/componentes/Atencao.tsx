@@ -6,7 +6,8 @@ import { useConsulta, useDocumento } from '../dados/hooks';
 import { situacaoFatura } from '../dados/financeiro';
 import { ultimoBackup } from '../dados/backup';
 import { useSessao } from '../sessao';
-import type { Equipamento, Fatura, Instrumento, Orcamento, Peca } from '../tipos';
+import type { Contrato, Equipamento, Fatura, Instrumento, Orcamento, Peca } from '../tipos';
+import { aFaturar, competenciaDe, rotuloCompetencia } from '../dados/contratos';
 import { diasAte, somarDias } from '../util/datas';
 import { fmtMoeda } from '../util/formato';
 import { Icone } from './Icone';
@@ -34,6 +35,7 @@ export function QuadroAtencao() {
   );
   const inst = useConsulta<Instrumento>(() => query(collection(db, 'instrumentos')), []);
   const pecas = useConsulta<Peca>(() => query(collection(db, 'pecas')), []);
+  const contratos = useConsulta<Contrato>(() => query(collection(db, 'contratos'), where('status', '==', 'ativo')), []);
 
   const aguardando = orc.itens.filter((o) => o.status === 'enviado').length;
   const aprovadosSemFatura = orc.itens.filter((o) => o.status === 'aprovado' && !o.faturaId).length;
@@ -41,6 +43,9 @@ export function QuadroAtencao() {
   const equipamentos = venc.itens.filter((e) => e.ativo !== false).length;
   const certificados = inst.itens.filter((i) => i.ativo !== false && i.validade && diasAte(i.validade.toDate()) <= 30).length;
   const repor = pecas.itens.filter((p) => p.ativo !== false && p.quantidade <= p.minimo).length;
+  const competencia = competenciaDe(new Date());
+  const aFaturarMes = contratos.itens.filter((c) => aFaturar(c, competencia)).length;
+  const terminando = contratos.itens.filter((c) => c.fim && diasAte(c.fim.toDate()) >= 0 && diasAte(c.fim.toDate()) <= 30).length;
 
   const itens: { n: number; texto: string; para: string; icone: string; forte?: boolean; rotulo?: string }[] = [
     { n: aprovadosSemFatura, texto: 'orçamento(s) aprovado(s) para executar/faturar', para: '/interno/financeiro?aba=orcamentos', icone: 'moeda', forte: true },
@@ -48,6 +53,8 @@ export function QuadroAtencao() {
     { n: vencidas.length, texto: `fatura(s) vencida(s) · ${fmtMoeda(vencidas.reduce((t, f) => t + f.total, 0))}`, para: '/interno/financeiro?aba=faturas', icone: 'moeda', forte: true },
     { n: equipamentos, texto: 'equipamento(s) com preventiva/exigência vencendo em 30 dias', para: '/interno/vencimentos', icone: 'calendario' },
     { n: certificados, texto: 'instrumento(s) com certificado vencendo ou vencido', para: '/interno/instrumentos', icone: 'lista' },
+    { n: aFaturarMes, texto: `contrato(s) a faturar em ${rotuloCompetencia(competencia)}`, para: '/interno/contratos', icone: 'moeda', forte: true },
+    { n: terminando, texto: 'contrato(s) terminam em até 30 dias', para: '/interno/contratos', icone: 'lista' },
     { n: repor, texto: 'peça(s) no estoque mínimo', para: '/interno/estoque', icone: 'caixa' },
     { n: lembreteBackup ? 1 : 0, texto: 'backup', rotulo: lembreteBackup ?? '', para: '/interno/backup', icone: 'nuvem' },
   ].filter((i) => i.n > 0);

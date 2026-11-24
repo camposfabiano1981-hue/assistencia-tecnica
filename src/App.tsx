@@ -27,6 +27,7 @@ import { Mais } from './paginas/interno/Mais';
 import { Indicadores } from './paginas/interno/Indicadores';
 import { Backup } from './paginas/interno/Backup';
 import { ListaServicos, ServicoEditar } from './paginas/interno/Servicos';
+import { ListaContratos, ContratoEditar, ContratoDetalhe } from './paginas/interno/Contratos';
 
 export function App() {
   return (
@@ -91,6 +92,10 @@ export function App() {
               <Route path="backup" element={<Backup />} />
               <Route path="servicos" element={<ListaServicos />} />
               <Route path="servicos/:id" element={<ServicoEditar />} />
+              <Route path="contratos" element={<ListaContratos />} />
+              <Route path="contratos/novo" element={<ContratoEditar />} />
+              <Route path="contratos/:id" element={<ContratoDetalhe />} />
+              <Route path="contratos/:id/editar" element={<ContratoEditar />} />
             </Route>
           </Route>
 

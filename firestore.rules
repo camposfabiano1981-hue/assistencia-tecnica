@@ -268,11 +268,12 @@ service cloud.firestore {
     // ================= Fase 3 =================
 
     // ---------- Autenticidade dos laudos ----------
-    // Qualquer pessoa confere um laudo pelo código impresso nele, mas ninguém lista os códigos.
+    // Qualquer pessoa confere um laudo pelo código impresso nele; listar os códigos, só o gestor.
     // O registro nasce junto com a conclusão da OS (mesmo lote) e não muda depois.
     match /verificacoes/{codigo} {
       allow get: if true;
-      allow list: if false;
+      // Só o gestor lista (cópia de segurança); o público confere um código por vez.
+      allow list: if gestor();
       allow create: if equipe() && codigo.size() == 16
         && dados().osId is string
         && getAfter(/databases/$(database)/documents/os/$(dados().osId)).data.codigoVerificacao == codigo;
@@ -292,6 +293,27 @@ service cloud.firestore {
         && (!('comentario' in dados()) || texto(dados().comentario, 1000))
         && dados().por.uid == request.auth.uid && dados().em == request.time;
       allow update, delete: if false;
+    }
+
+    // ---------- Contratos de manutenção ----------
+    match /contadores/contratos {
+      allow read: if equipe();
+      allow create: if equipe() && dados().keys().hasOnly(['n']) && dados().n == 1
+        && existsAfter(/databases/$(database)/documents/contratos/1);
+      allow update: if equipe() && dados().keys().hasOnly(['n']) && dados().n == resource.data.n + 1
+        && existsAfter(/databases/$(database)/documents/contratos/$(string(dados().n)));
+    }
+    match /contratos/{id} {
+      function contadorOk() {
+        return getAfter(/databases/$(database)/documents/contadores/contratos).data.n == int(id)
+          && dados().numero == int(id);
+      }
+      allow read: if equipe() || (cliente() && resource.data.clienteId == meuCliente());
+      allow create: if equipe() && contadorOk() && dados().clienteId is string && dados().valor is number
+        && dados().valor >= 0 && dados().status == 'ativo';
+      allow update: if equipe() && dados().numero == resource.data.numero && dados().clienteId == resource.data.clienteId
+        && dados().valor is number && dados().valor >= 0;
+      allow delete: if false;
     }
 
     // ---------- Catálogo de serviços (tabela de preços): só a equipe ----------

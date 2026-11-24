@@ -467,6 +467,9 @@ export interface Fatura {
   nfse?: { numero: string; emitidaEm: Timestamp | null; chave?: string } | null;
   nfe?: { numero: string; chave?: string } | null;
   atualizadaEm: Timestamp;
+  /** Fase 3: fatura mensal de contrato (competência AAAA-MM). */
+  contratoId?: string | null;
+  competencia?: string | null;
 }
 
 /** Avaliação do atendimento pelo cliente (avaliacoes/{osId}): uma por OS concluída. */
@@ -484,4 +487,40 @@ export interface Avaliacao {
   comentario?: string;
   por: { uid: string; nome: string };
   em: Timestamp;
+}
+
+// ================= Fase 3: contratos de manutenção =================
+export type CobrancaContrato = 'mensal' | 'por-equipamento';
+export type StatusContrato = 'ativo' | 'suspenso' | 'encerrado';
+
+export interface Contrato {
+  id: string;
+  numero: number;
+  clienteId: string;
+  cliente: SnapshotCliente;
+  /** Equipamentos cobertos (e a descrição de cada um, para o PDF). */
+  equipamentoIds: string[];
+  equipamentos: { id: string; descricao: string }[];
+  objeto: string;
+  /** Valor fixo por mês, ou valor por equipamento por mês. */
+  cobranca: CobrancaContrato;
+  valor: number;
+  pecasIncluidas: boolean;
+  /** 0 = conforme a periodicidade de cada tipo de equipamento. */
+  visitasPreventivasAno: number;
+  /** Prazo para iniciar o atendimento dos chamados, em horas. */
+  prazoAtendimentoHoras: number;
+  inicio: Timestamp;
+  /** null = prazo indeterminado. */
+  fim: Timestamp | null;
+  /** Dia do mês do vencimento da fatura (1 a 28). */
+  diaVencimento: number;
+  reajuste?: string;
+  observacoes?: string;
+  status: StatusContrato;
+  /** Última competência faturada (AAAA-MM). */
+  ultimaCompetencia?: string | null;
+  criadoEm: Timestamp;
+  criadoPor: string;
+  atualizadoEm: Timestamp;
 }

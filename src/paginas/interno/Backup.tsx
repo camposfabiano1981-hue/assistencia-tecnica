@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Timestamp, collection, getDocsFromServer, query, where, type DocumentData, type Query } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { useSessao } from '../../sessao';
 import { mensagemErro } from '../../dados/hooks';
 import { gerarBackup, marcarBackup, ultimoBackup, type ResultadoBackup } from '../../dados/backup';
 import { csvClientes, csvEquipamentos, csvEstoque, csvFaturas, csvInstrumentos, csvOS } from '../../dados/exportar';
@@ -197,10 +198,15 @@ function Planilhas() {
 }
 
 export function Backup() {
+  const { perfil } = useSessao();
   return (
     <>
       <CabecalhoPagina titulo="Backup e exportação" voltar="/interno/mais" />
-      <CopiaCompleta />
+      {perfil?.papel === 'gestor' ? (
+        <CopiaCompleta />
+      ) : (
+        <Aviso tom="info">A cópia de segurança completa é feita pelo gestor. As planilhas abaixo estão liberadas para a equipe.</Aviso>
+      )}
       <Planilhas />
     </>
   );

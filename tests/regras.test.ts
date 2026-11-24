@@ -434,6 +434,7 @@ describe('autenticidade dos laudos (Fase 3)', () => {
     await assertSucceeds(getDoc(doc(anon, 'verificacoes/NAOEXISTE2345678')));
     await assertFails(getDocs(collection(anon, 'verificacoes')));
     await assertFails(getDocs(collection(fs('tec'), 'verificacoes')));
+    await assertSucceeds(getDocs(collection(fs('gestor'), 'verificacoes')));
   });
 
   it('não se forja nem se altera', async () => {
@@ -495,5 +496,49 @@ describe('avaliação do atendimento (Fase 3)', () => {
     await assertSucceeds(getDocs(query(collection(fs('cli1'), 'avaliacoes'), where('clienteId', '==', 'c1'))));
     await assertFails(getDoc(doc(fs('cli2'), 'avaliacoes/1')));
     await assertFails(getDocs(collection(fs('cli1'), 'avaliacoes')));
+  });
+});
+
+describe('contratos de manutenção (Fase 3)', () => {
+  const contrato = (n: number, extra: Record<string, unknown> = {}) => ({
+    numero: n,
+    clienteId: 'c1',
+    cliente: { nome: 'Clínica A' },
+    equipamentoIds: ['e1'],
+    equipamentos: [{ id: 'e1', descricao: 'Autoclave' }],
+    cobranca: 'mensal',
+    valor: 450,
+    status: 'ativo',
+    ...extra,
+  });
+  const criarContrato = (db: Firestore, extra: Record<string, unknown> = {}) =>
+    runTransaction(db, async (tx) => {
+      const ref = doc(db, 'contadores/contratos');
+      const c = await tx.get(ref);
+      const n = (c.exists() ? (c.data().n as number) : 0) + 1;
+      tx.set(ref, { n });
+      tx.set(doc(db, 'contratos', String(n)), contrato(n, extra));
+      return n;
+    });
+
+  it('só a equipe cria, com numeração sequencial e valor válido', async () => {
+    await semear();
+    await assertFails(criarContrato(fs('cli1')));
+    await assertFails(criarContrato(fs('tec'), { valor: -10 }));
+    await assertFails(criarContrato(fs('tec'), { status: 'encerrado' }));
+    expect(await criarContrato(fs('tec'))).toBe(1);
+    await assertFails(setDoc(doc(fs('tec'), 'contratos/7'), contrato(7)));
+    await assertSucceeds(updateDoc(doc(fs('tec'), 'contratos/1'), { valor: 480, status: 'suspenso' }));
+    await assertFails(updateDoc(doc(fs('tec'), 'contratos/1'), { clienteId: 'c2' }));
+    await assertFails(deleteDoc(doc(fs('gestor'), 'contratos/1')));
+  });
+
+  it('o cliente lê só os próprios contratos e não altera', async () => {
+    await semear();
+    await criarContrato(fs('tec'));
+    await assertSucceeds(getDoc(doc(fs('cli1'), 'contratos/1')));
+    await assertSucceeds(getDocs(query(collection(fs('cli1'), 'contratos'), where('clienteId', '==', 'c1'))));
+    await assertFails(getDoc(doc(fs('cli2'), 'contratos/1')));
+    await assertFails(updateDoc(doc(fs('cli1'), 'contratos/1'), { valor: 1 }));
   });
 });

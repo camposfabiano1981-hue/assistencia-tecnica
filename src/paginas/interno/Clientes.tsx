@@ -187,6 +187,9 @@ export function ClienteDetalhe() {
             Registrar chamado
           </LinkBotao>
           <BotaoDossieVisa clienteId={id} rotulo="Pasta da VISA (PDF)" />
+          <LinkBotao para={`/interno/contratos/novo?cliente=${id}`} variante="secundario" icone="lista">
+            Novo contrato
+          </LinkBotao>
         </div>
       </Cartao>
 
