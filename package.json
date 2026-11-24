@@ -12,7 +12,7 @@
     "test:regras": "firebase emulators:exec --only firestore --project demo-assistencia \"vitest run tests/regras.test.ts\"",
     "icones": "NODE_PATH=$(npm root -g) node scripts/gerar-icones.cjs",
     "test:unidade": "vitest run tests/pix.test.ts tests/csv.test.ts tests/datas.test.ts tests/backup.test.ts tests/itens.test.ts tests/verificacao.test.ts tests/visa.test.ts tests/contratos.test.ts",
-    "e2e": "export NODE_PATH=$(npm root -g) && node scripts/limpar-emuladores.cjs && node scripts/e2e.cjs && node scripts/e2e-fase2.cjs"
+    "e2e": "export NODE_PATH=$(npm root -g) && node scripts/limpar-emuladores.cjs && node scripts/e2e.cjs && node scripts/e2e-fase2.cjs && node scripts/e2e-fase3.cjs"
   },
   "dependencies": {
     "firebase": "^12.19.0",

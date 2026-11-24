@@ -22,7 +22,7 @@ import {
 import { rotuloSituacaoFatura, situacaoFatura, snapshotCliente, tomSituacaoFatura } from '../../dados/financeiro';
 import type { Cliente, CobrancaContrato, Contrato, Equipamento, Fatura, StatusContrato } from '../../tipos';
 import { descreverEquipamento, fmtData, fmtMoeda, type Tom } from '../../util/formato';
-import { deInputData, paraInputData } from '../../util/datas';
+import { deInputData, fimDoDia, inicioDoDia, paraInputData } from '../../util/datas';
 import { CampoNumero } from '../../componentes/Valores';
 import { BotaoVisualizar } from '../../componentes/Visualizador';
 import {
@@ -249,8 +249,9 @@ export function ContratoEditar() {
       pecasIncluidas: f.pecasIncluidas,
       visitasPreventivasAno: Math.max(0, Math.round(Number(f.visitas) || 0)),
       prazoAtendimentoHoras: Number(f.prazo) || 24,
-      inicio: Timestamp.fromDate(inicio),
-      fim: fim ? Timestamp.fromDate(fim) : null,
+      // A vigência vale o dia inteiro: das 0h do primeiro dia às 23h59 do último.
+      inicio: Timestamp.fromDate(inicioDoDia(inicio)),
+      fim: fim ? Timestamp.fromDate(fimDoDia(fim)) : null,
       diaVencimento: dia,
       reajuste: f.reajuste.trim(),
       observacoes: f.observacoes.trim(),

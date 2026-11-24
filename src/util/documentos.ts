@@ -306,13 +306,18 @@ export function gerarContratoPDF(c: Contrato, empresa: Empresa | null): File {
   const f = new Folha();
   f.cabecalho(empresa, ['CONTRATO DE PRESTAÇÃO DE', 'SERVIÇOS DE MANUTENÇÃO'], `Nº ${n5(c.numero)}`, `Início em ${fmtData(c.inicio)}`);
 
-  f.secao('Partes');
+  f.secao('Contratante');
   f.pares([
-    ['Contratante', c.cliente.nome],
+    ['Nome', c.cliente.nome],
     ['CNPJ/CPF', c.cliente.documento],
     ['Endereço', [c.cliente.endereco, c.cliente.cidade].filter(Boolean).join(' - ')],
-    ['Contratada', empresa?.nome],
+    ['Telefone', fmtTelefone(c.cliente.telefone)],
+  ]);
+  f.secao('Contratada');
+  f.pares([
+    ['Nome', empresa?.nome],
     ['CNPJ/CPF', empresa?.documento],
+    ['Endereço', [empresa?.endereco, empresa?.cidade].filter(Boolean).join(' - ')],
     ['Responsável técnico', [empresa?.rtNome, empresa?.rtRegistro].filter(Boolean).join(' - ')],
   ]);
 

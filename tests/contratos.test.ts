@@ -66,6 +66,8 @@ describe('contratos de manutenção', () => {
     expect(contratoDoEquipamento(lista, 'e2', new Date(2026, 10, 1))?.id).toBe('y');
     expect(contratoDoEquipamento(lista, 'e9', new Date(2026, 10, 1))).toBeNull();
     expect(contratoDoEquipamento(lista, 'e2', new Date(2026, 0, 1))).toBeNull(); // antes do início
+    // Vigência começando à 0h: chamado aberto de manhã no primeiro dia já é coberto.
+    expect(contratoDoEquipamento([contrato({ inicio: ts(2026, 11, 24) })], 'e1', new Date(2026, 10, 24, 7, 16))?.id).toBe('1');
     expect(prazoDoChamado(new Date(2026, 10, 2, 9, 0), 24)).toEqual(new Date(2026, 10, 3, 9, 0));
   });
 });

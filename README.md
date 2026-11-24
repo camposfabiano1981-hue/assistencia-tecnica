@@ -33,6 +33,15 @@ no momento do atendimento, então não muda se o cadastro for alterado depois.
 | **Serviços e preços** | Tabela de serviços com preço e unidade (hora, visita, km…). Orçamento, fatura e OS aceitam serviços e peças cadastrados ou avulsos, e a fatura feita a partir da OS já vem com os preços. |
 | **Visualizar documentos** | OS (laudo), chamado, orçamento e fatura abrem na tela, inclusive no celular, antes de enviar, baixar ou imprimir. |
 
+## O que a Fase 3 acrescenta
+
+| Recurso | O que faz |
+|---|---|
+| **QR de autenticidade** | Cada laudo sai com QR code e código de verificação. Qualquer pessoa (fiscal, auditor, cliente) confere em `/v/CÓDIGO`, sem login, se o laudo é verdadeiro e se os dados batem. |
+| **Avaliação do atendimento** | O cliente dá nota de 1 a 5 e comentário no portal, pelo chamado ou pelo link que vai na mensagem de conclusão. A média e os comentários entram nos indicadores. |
+| **Pasta da VISA** | No portal, o cliente vê a situação de cada equipamento (preventivas e exigências), o último laudo e os documentos da sua empresa. O dossiê em PDF reúne inventário, plano de manutenção, histórico de 24 meses com o código de cada laudo e os instrumentos RBC usados. |
+| **Contratos de manutenção** | Valor fixo por mês ou por equipamento, peças incluídas ou não, prazo de atendimento, preventivas, vigência e reajuste. As faturas do mês saem com um toque, o chamado mostra o prazo do contrato e o indicador mostra se foi cumprido. O PDF do contrato é um modelo de referência. |
+
 ## Publicar pela primeira vez
 
 ### 1. Criar o projeto no Firebase
@@ -106,6 +115,16 @@ No Chrome, abra o endereço → menu ⋮ → **Instalar app** (ou "Adicionar à 
 6. Para equipamentos atendidos antes do sistema, lance o próximo vencimento em **Definir data**, na
    ficha do equipamento. **Vencimentos → Verificar** mostra quem ainda está sem data.
 
+## Começar a usar a Fase 3
+
+1. **Mais → Configurações → Documentos para a Pasta da VISA**: cadastre cartão CNPJ, alvará, registro do
+   responsável técnico (CFT/CREA) etc., com número, validade e o link do arquivo no Google Drive.
+2. **Mais → Contratos → Novo**: escolha o cliente, marque os equipamentos cobertos e defina valor, prazo de
+   atendimento e vencimento. Revise o texto do PDF com o seu advogado antes de assinar.
+3. Todo mês, o painel avisa os **contratos a faturar**: em **Contratos**, toque no botão que gera as faturas
+   do mês (uma por contrato, com Pix e vencimento no dia combinado).
+4. Ao concluir uma OS, use **Avisar o cliente no WhatsApp**: a mensagem já leva o link da avaliação.
+
 ## Notas fiscais e contador
 
 O app **não emite** nota fiscal: sem servidor, não há como assinar a nota com certificado digital.
@@ -176,8 +195,9 @@ npm run build             # compilação de produção
 Com os emuladores e o `dev` rodando, `npm run e2e` apaga os dados dos emuladores e percorre as duas
 fases. Na Fase 1: instalação, cliente, chamado pelo celular, OS assinada e laudo. Na Fase 2: Pix,
 orçamento aprovado no portal, OS com instrumento, peça do estoque e exigências, fatura paga com NFS-e,
-vencimentos, indicadores, backup e restauração em outro projeto do emulador. As capturas de tela ficam
-em `capturas/`. Requer o Playwright instalado globalmente e `npm install` em `ferramentas/restaurar`.
+vencimentos, indicadores, backup e restauração em outro projeto do emulador. Na Fase 3: documentos da
+empresa, conferência pública do laudo, avaliação, contrato com fatura do mês e prazo de atendimento, Pasta
+da VISA e dossiê. As capturas de tela ficam em `capturas/`. Requer o Playwright instalado globalmente e `npm install` em `ferramentas/restaurar`.
 
 ## Estrutura
 
@@ -214,6 +234,11 @@ scripts/                   testes ponta a ponta e geração de ícones
 - **Registro preservado.** A OS concluída não pode ser alterada nem apagada.
 - **Orçamento só se responde.** O cliente aprova ou recusa um orçamento enviado e dentro da validade;
   as regras impedem que ele mude valores, itens ou condições. Quem respondeu e quando fica registrado.
+- **Conferência pública mínima.** A página de autenticidade mostra só número da OS, cliente, equipamento,
+  datas, técnico e resultado, e apenas para quem tem o código impresso no laudo. Listar os códigos, só o
+  gestor (para o backup).
+- **Avaliação e contrato do próprio cliente.** O cliente avalia uma vez cada OS concluída dele e lê só os
+  próprios contratos; ninguém altera uma avaliação depois de enviada.
 - **Financeiro separado.** O cliente só vê as próprias faturas. Estoque e instrumentos são só da
   equipe, e o histórico de movimentos do estoque não se altera nem se apaga.
 - **Saída apaga a cópia local.** Ao sair, o app apaga os dados guardados no aparelho, o que importa em
@@ -224,6 +249,7 @@ scripts/                   testes ponta a ponta e geração de ícones
 
 ## Próximas fases
 
-- **Fase 3:** Pasta da VISA no portal, contratos, avaliação do atendimento e QR de autenticidade no laudo.
+- **Notas fiscais automáticas** (em construção): emissão da NFS-e e da NF-e das peças com um toque na
+  fatura, pela Focus NFe, com a chave guardada no Google Apps Script. Exige certificado digital e-CNPJ A1.
 - **Fase 4** (plano Blaze, quando a receita justificar): WhatsApp automático, lembretes agendados,
-  NFS-e pela API nacional, fotos no Cloud Storage e backup automático.
+  fotos no Cloud Storage e backup automático.
