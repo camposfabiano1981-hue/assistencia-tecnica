@@ -32,7 +32,21 @@ import {
 } from '../../dados/financeiro';
 import { csvFaturas } from '../../dados/exportar';
 import { useServicosAtivos } from '../../dados/servicos';
-import type { Chamado, Cliente, Equipamento, Fatura, FormaPagamento, ItemValor, Orcamento, OrdemServico, Peca, ServicoCatalogo, StatusOrcamento } from '../../tipos';
+import {
+  avisarPonte,
+  montarNfe,
+  montarNfse,
+  pendenciasNfe,
+  pendenciasNfse,
+  repartirDesconto,
+  rotuloStatusEmissao,
+  solicitarCancelamento,
+  solicitarEmissao,
+  type TipoNota,
+} from '../../dados/fiscal';
+import { Icone } from '../../componentes/Icone';
+import type { Chamado, Cliente, ConfigFiscal, Equipamento, Fatura, FormaPagamento, ItemValor, Orcamento, OrdemServico, Peca, ServicoCatalogo, StatusEmissao, StatusOrcamento } from '../../tipos';
+import type { Tom } from '../../util/formato';
 import { descreverEquipamento, fmtData, fmtDataHora, fmtMoeda, numeroOS } from '../../util/formato';
 import { deInputData, paraInputData, somarDias } from '../../util/datas';
 import { baixarArquivo } from '../../util/csv';
@@ -812,12 +826,17 @@ export function FaturaDetalhe() {
           Desfazer pagamento
         </Botao>
       )}
-      {fat.status !== 'cancelada' && <NotasFiscais fat={fat} />}
+      {fat.status !== 'cancelada' && <NotasDaFatura fat={fat} cliente={cliente.dados} />}
       {fat.status === 'aberta' && (
         <Botao
           variante="perigo"
           bloco
           onClick={() => {
+            const autorizadas = (['nfse', 'nfe'] as const).filter((t) => fat.emissao?.[t]?.status === 'autorizada').map((t) => (t === 'nfse' ? 'NFS-e' : 'NF-e'));
+            if (autorizadas.length) {
+              window.alert(`Cancele antes a ${autorizadas.join(' e a ')} autorizada (em Notas fiscais): cancelar só a fatura deixaria a nota valendo.`);
+              return;
+            }
             const motivo = window.prompt('Motivo do cancelamento:');
             if (motivo?.trim()) void acao(() => cancelarFatura(fat, motivo), 'Fatura cancelada.');
           }}
@@ -879,13 +898,22 @@ function RegistrarPagamento({ fat, aoConcluir }: { fat: Fatura; aoConcluir: (t: 
 }
 
 function NotasFiscais({ fat }: { fat: Fatura }) {
+  return (
+    <Cartao titulo="Notas fiscais">
+      <RegistroNotas fat={fat} />
+    </Cartao>
+  );
+}
+
+/** Registro manual: notas emitidas fora do app (Emissor Nacional, emissor de NF-e). */
+function RegistroNotas({ fat }: { fat: Fatura }) {
   const [nfse, setNfse] = useState(fat.nfse?.numero ?? '');
   const [dataNfse, setDataNfse] = useState(paraInputData(fat.nfse?.emitidaEm?.toDate() ?? null));
   const [chave, setChave] = useState(fat.nfse?.chave ?? '');
   const [nfe, setNfe] = useState(fat.nfe?.numero ?? '');
   const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso'; texto: string } | null>(null);
   return (
-    <Cartao titulo="Notas fiscais">
+    <>
       <p className="pequeno" style={{ marginTop: 0 }}>
         Emita a NFS-e no{' '}
         <a href={EMISSOR_NACIONAL_NFSE} target="_blank" rel="noreferrer">
@@ -917,6 +945,136 @@ function NotasFiscais({ fat }: { fat: Fatura }) {
       >
         Salvar notas
       </Botao>
+    </>
+  );
+}
+
+// ======================= Emissão automática (Focus NFe) =======================
+
+const TOM_EMISSAO: Record<StatusEmissao, Tom> = {
+  solicitada: 'info',
+  processando: 'info',
+  autorizada: 'sucesso',
+  erro: 'perigo',
+  cancelamento: 'alerta',
+  cancelada: 'neutro',
+};
+
+function NotasDaFatura({ fat, cliente }: { fat: Fatura; cliente: Cliente | null }) {
+  const { empresa } = useSessao();
+  const cfg = empresa?.fiscal;
+  const pecas = useConsulta<Peca>(() => (cfg?.ativo ? query(collection(db, 'pecas')) : null), [cfg?.ativo]);
+  if (!cfg?.ativo) return <NotasFiscais fat={fat} />;
+  return (
+    <Cartao titulo="Notas fiscais" acoes={cfg.ambiente === 'homologacao' ? <Selo tom="alerta">Homologação</Selo> : undefined}>
+      {fat.totalServicos > 0 && <EmissaoNota fat={fat} tipo="nfse" cliente={cliente} cfg={cfg} pecas={pecas.itens} />}
+      {fat.totalPecas > 0 && <EmissaoNota fat={fat} tipo="nfe" cliente={cliente} cfg={cfg} pecas={pecas.itens} />}
+      <details className="grafico-tabela" style={{ marginTop: 12 }}>
+        <summary>Registrar nota emitida fora do app</summary>
+        <RegistroNotas fat={fat} />
+      </details>
     </Cartao>
+  );
+}
+
+function EmissaoNota({ fat, tipo, cliente, cfg, pecas }: { fat: Fatura; tipo: TipoNota; cliente: Cliente | null; cfg: ConfigFiscal; pecas: Peca[] }) {
+  const { perfil } = useSessao();
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState('');
+  const p = fat.emissao?.[tipo] ?? null;
+  const nome = tipo === 'nfse' ? 'NFS-e' : 'NF-e';
+  const desconto = repartirDesconto(fat);
+  const valor = tipo === 'nfse' ? fat.totalServicos - desconto.servicos : fat.totalPecas - desconto.pecas;
+  const pendencias = tipo === 'nfse' ? pendenciasNfse(fat, cliente, cfg) : pendenciasNfe(fat, cliente, cfg, pecas);
+  const andamento = !!p && ['solicitada', 'processando', 'cancelamento'].includes(p.status);
+
+  async function emitir() {
+    if (!cliente) return;
+    setErro('');
+    setOcupado(true);
+    try {
+      const payload = tipo === 'nfse' ? montarNfse(fat, cliente, cfg) : montarNfe(fat, cliente, cfg, pecas);
+      await solicitarEmissao(fat, tipo, payload, cfg, perfil?.nome ?? 'Equipe');
+    } catch (e) {
+      setErro(mensagemErro(e));
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function cancelar() {
+    const motivo = window.prompt(`Motivo do cancelamento da ${nome} (mínimo 15 letras):`);
+    if (!motivo) return;
+    setErro('');
+    try {
+      await solicitarCancelamento(fat, tipo, motivo, cfg);
+    } catch (e) {
+      setErro(mensagemErro(e));
+    }
+  }
+
+  return (
+    <div className="nota-emissao">
+      <div className="nota-topo">
+        <strong>
+          {nome} {tipo === 'nfse' ? 'dos serviços' : 'das peças'} · <span className="numero">{fmtMoeda(valor)}</span>
+        </strong>
+        {p && <Selo tom={TOM_EMISSAO[p.status]}>{rotuloStatusEmissao[p.status]}</Selo>}
+      </div>
+      {erro && <Aviso tom="erro">{erro}</Aviso>}
+      {p?.status === 'autorizada' && (
+        <>
+          <p style={{ margin: '6px 0' }}>
+            {nome} nº <strong>{p.numero}</strong>
+            {p.serie ? ` série ${p.serie}` : ''} autorizada em {fmtDataHora(p.autorizadaEm)}
+            {p.ambiente === 'homologacao' ? ' (homologação: sem valor fiscal)' : ''}.
+          </p>
+          {p.mensagem && <Aviso tom="alerta">{p.mensagem}</Aviso>}
+          <div className="acoes" style={{ marginTop: 6 }}>
+            {p.urlPdf && (
+              <a className="botao botao-secundario" href={p.urlPdf} target="_blank" rel="noreferrer">
+                <Icone nome="pdf" tamanho={20} />
+                <span>PDF da {nome}</span>
+              </a>
+            )}
+            {p.urlXml && (
+              <a className="botao botao-secundario" href={p.urlXml} target="_blank" rel="noreferrer">
+                <span>XML</span>
+              </a>
+            )}
+            <Botao variante="fantasma" onClick={() => void cancelar()}>
+              Cancelar {nome}
+            </Botao>
+          </div>
+        </>
+      )}
+      {andamento && (
+        <p className="pequeno" role="status" style={{ margin: '6px 0' }}>
+          {p?.status === 'cancelamento' ? 'Pedido de cancelamento enviado' : 'Enviando ao provedor'}: costuma levar segundos; a ponte conclui em até 5
+          minutos.{' '}
+          <button type="button" className="link-botao" onClick={() => void avisarPonte(cfg.urlPonte, fat.id)}>
+            Avisar a ponte de novo
+          </button>
+        </p>
+      )}
+      {(!p || p.status === 'erro' || p.status === 'cancelada') && (
+        <>
+          {p?.status === 'erro' && <Aviso tom="erro">Recusada: {p.mensagem}</Aviso>}
+          {!!pendencias.length && (
+            <Aviso tom="alerta">
+              Antes de emitir, falta:
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                {pendencias.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </Aviso>
+          )}
+          <Botao icone="check" carregando={ocupado} disabled={!!pendencias.length} onClick={() => void emitir()} style={{ marginTop: 6 }}>
+            {p?.status === 'erro' ? `Emitir ${nome} de novo` : `Emitir ${nome}`}
+          </Botao>
+        </>
+      )}
+    </div>
   );
 }

@@ -127,17 +127,24 @@ No Chrome, abra o endereço → menu ⋮ → **Instalar app** (ou "Adicionar à 
 
 ## Notas fiscais e contador
 
-O app **não emite** nota fiscal: sem servidor, não há como assinar a nota com certificado digital.
-O caminho é este:
+Há dois jeitos de emitir, e os dois deixam o número e a chave da nota registrados na fatura:
 
-1. Emita a NFS-e do serviço no [Emissor Nacional](https://www.nfse.gov.br/EmissorNacional)
-   (lista da LC 116: 14.01 manutenção, 14.02 assistência técnica). O padrão nacional passou a ser
-   exigido pela LC 214/2025; para empresas do Simples, a Resolução CGSN 189/2026 fixa 01/09/2026.
-   Confirme com o seu contador as regras do seu município.
-2. Peças vendidas saem em NF-e, no seu emissor. A fatura já separa serviço e peça, o que também ajuda
-   no Simples (serviço no Anexo III, revenda de mercadoria no Anexo I).
-3. Na fatura, registre o número, a data e a chave da NFS-e e o número da NF-e. O cliente vê no portal.
-4. No fim do mês: **Financeiro → Faturas → Planilha para o contador**.
+- **Automático (recomendado depois de configurar):** a fatura tem os botões **Emitir NFS-e** (serviços,
+  padrão nacional) e **Emitir NF-e** (peças). A emissão passa pela Focus NFe, com o token guardado numa
+  ponte gratuita no Google Apps Script. Exige certificado **e-CNPJ A1** e conta na Focus. Passo a passo em
+  [`apps-script/notas-fiscais/LEIA-ME.md`](apps-script/notas-fiscais/LEIA-ME.md). Comece em
+  **homologação**: as notas de teste não aparecem para o cliente nem na planilha do contador.
+- **Manual:** emita a NFS-e no [Emissor Nacional](https://www.nfse.gov.br/EmissorNacional) e a NF-e no
+  seu emissor, e registre os números na fatura (**Registrar nota emitida fora do app**).
+
+Pontos fiscais (confirme com o seu contador):
+- O padrão nacional da NFS-e passou a ser exigido pela LC 214/2025; para empresas do Simples, a Resolução
+  CGSN 189/2026 fixa 01/09/2026. Lista da LC 116: 14.01 manutenção, 14.02 assistência técnica.
+- As peças saem em NF-e. A fatura separa serviço e peça, o que também ajuda no Simples (serviço no
+  Anexo III, revenda de mercadoria no Anexo I).
+- Os padrões fiscais do app são configuráveis: código de tributação nacional, CSOSN, CFOP dentro e fora
+  do estado, PIS/COFINS, forma de pagamento e campos extras.
+- No fim do mês: **Financeiro → Faturas → Planilha para o contador**.
 
 ## Backup e restauração
 
@@ -218,7 +225,8 @@ src/util/documentos.ts     PDFs de orçamento e fatura
 src/util/imagem.ts         compressão de fotos no aparelho
 src/paginas/portal/        portal do cliente
 src/paginas/interno/       painel, chamados, OS, cadastros, configurações
-apps-script/               aviso por e-mail (Google Apps Script)
+apps-script/               aviso por e-mail e ponte das notas fiscais (Google Apps Script)
+src/dados/fiscal.ts        pedido da NFS-e e da NF-e (padrões fiscais configuráveis)
 ferramentas/restaurar/     restauração do backup (firebase-admin)
 scripts/                   testes ponta a ponta e geração de ícones
 .github/workflows/         publicação automática e prévias
@@ -249,7 +257,5 @@ scripts/                   testes ponta a ponta e geração de ícones
 
 ## Próximas fases
 
-- **Notas fiscais automáticas** (em construção): emissão da NFS-e e da NF-e das peças com um toque na
-  fatura, pela Focus NFe, com a chave guardada no Google Apps Script. Exige certificado digital e-CNPJ A1.
 - **Fase 4** (plano Blaze, quando a receita justificar): WhatsApp automático, lembretes agendados,
   fotos no Cloud Storage e backup automático.

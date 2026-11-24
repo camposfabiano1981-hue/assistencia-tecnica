@@ -43,6 +43,73 @@ export interface Empresa {
   orcValidadeDias?: number;
   // Fase 3: documentos da empresa mostrados na Pasta da VISA
   documentos?: DocumentoEmpresa[];
+  // Emissão automática de NFS-e e NF-e (Focus NFe, pela ponte no Google Apps Script)
+  fiscal?: ConfigFiscal;
+}
+
+export type AmbienteFiscal = 'homologacao' | 'producao';
+
+/** Dados e padrões fiscais da empresa. O contador confere cada padrão antes de emitir em produção. */
+export interface ConfigFiscal {
+  ativo: boolean;
+  ambiente: AmbienteFiscal;
+  /** URL do app da web da ponte (Google Apps Script). */
+  urlPonte: string;
+  cnpj: string;
+  inscricaoMunicipal?: string;
+  inscricaoEstadual?: string;
+  /** Código IBGE do município do estabelecimento. */
+  codigoMunicipio: string;
+  uf: string;
+  /** NFS-e: 1 não optante, 2 MEI, 3 ME/EPP optante do Simples Nacional. */
+  opcaoSimples: '1' | '2' | '3';
+  nfse: {
+    codigoTributacaoNacional: string;
+    codigoTributacaoMunicipal?: string;
+    /** 1 operação tributável, 2 imunidade, 3 exportação, 4 não incidência. */
+    tributacaoIss: string;
+    /** 1 não retido, 2 retido pelo tomador, 3 retido pelo intermediário. */
+    retencaoIss: string;
+    descricaoComplementar?: string;
+    /** JSON com campos extras repassados ao provedor (orientação do suporte ou do contador). */
+    extras?: string;
+  };
+  nfe: {
+    naturezaOperacao: string;
+    cfopInterno: string;
+    cfopInterestadual: string;
+    csosn: string;
+    origem: string;
+    pisCst: string;
+    cofinsCst: string;
+    formaPagamento: string;
+    consumidorFinal: '0' | '1';
+    presencaComprador: string;
+    extras?: string;
+  };
+}
+
+export type StatusEmissao = 'solicitada' | 'processando' | 'autorizada' | 'erro' | 'cancelamento' | 'cancelada';
+
+/** Pedido de emissão gravado na fatura; a ponte envia ao provedor e grava o resultado aqui. */
+export interface PedidoEmissao {
+  status: StatusEmissao;
+  ambiente: AmbienteFiscal;
+  ref: string;
+  tentativa: number;
+  payload: Record<string, unknown>;
+  solicitadaEm: Timestamp;
+  por: string;
+  mensagem?: string | null;
+  numero?: string | null;
+  serie?: string | null;
+  chave?: string | null;
+  codigoVerificacao?: string | null;
+  urlPdf?: string | null;
+  urlXml?: string | null;
+  autorizadaEm?: Timestamp | null;
+  justificativa?: string | null;
+  atualizadaEm?: Timestamp | null;
 }
 
 /** Documento da empresa para a fiscalização (alvará, registro do RT…): o arquivo fica num link (ex.: Google Drive). */
@@ -67,6 +134,20 @@ export interface Cliente {
   id: string;
   nome: string;
   documento?: string;
+  // Endereço estruturado e dados fiscais (NFS-e e NF-e)
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  municipio?: string;
+  uf?: string;
+  /** Código IBGE do município (7 dígitos). */
+  codigoMunicipio?: string;
+  inscricaoEstadual?: string;
+  /** 1 contribuinte do ICMS, 2 contribuinte isento, 9 não contribuinte. */
+  indicadorIE?: '1' | '2' | '9';
+  emailNota?: string;
   tipo: TipoCliente;
   contato?: string;
   telefone?: string;
@@ -470,6 +551,8 @@ export interface Fatura {
   /** Fase 3: fatura mensal de contrato (competência AAAA-MM). */
   contratoId?: string | null;
   competencia?: string | null;
+  /** Emissão automática das notas (NFS-e dos serviços, NF-e das peças). */
+  emissao?: { nfse?: PedidoEmissao | null; nfe?: PedidoEmissao | null } | null;
 }
 
 /** Avaliação do atendimento pelo cliente (avaliacoes/{osId}): uma por OS concluída. */

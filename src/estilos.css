@@ -393,3 +393,8 @@ div.item-valor-desc { border: 0; padding: 0; min-height: 0; }
 .estrelas button:focus-visible { outline: 3px solid var(--primaria); }
 .estrelas-leitura .cheia { color: #e9a400; }
 .estrelas-leitura .vazia { color: #c9d3da; }
+
+/* ===== Emissão de notas fiscais na fatura ===== */
+.nota-emissao + .nota-emissao { border-top: 1px solid var(--borda); margin-top: 12px; padding-top: 12px; }
+.nota-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.link-botao { background: none; border: 0; padding: 0; color: var(--primaria); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }

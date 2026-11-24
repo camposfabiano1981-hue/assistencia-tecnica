@@ -87,7 +87,7 @@ async function assinar(pagina) {
 
   log('Configurações: dados da empresa e responsável técnico');
   await g.goto(`${APP}/interno/config`);
-  await g.getByLabel('CNPJ').fill('12.345.678/0001-90');
+  await g.getByLabel('CNPJ', { exact: true }).fill('12.345.678/0001-90');
   await g.getByLabel('Responsável técnico').fill('Carlos Técnico');
   await g.getByLabel('Registro do RT (CFT/CREA)').fill('CFT nº 1234567');
   await g.getByLabel('Cidade / UF').fill('São Paulo - SP');

@@ -18,6 +18,7 @@ import {
 } from '../../util/formato';
 import { abrirWhatsApp } from '../../util/whatsapp';
 import { BotaoDossieVisa } from '../../componentes/Documentos';
+import { buscarCep, fmtCep } from '../../util/cep';
 import {
   AreaTexto,
   Aviso,
@@ -73,7 +74,31 @@ export function ListaClientes() {
   );
 }
 
-const VAZIO = { nome: '', tipo: 'consultorio_odonto' as TipoCliente, documento: '', contato: '', telefone: '', whatsapp: '', email: '', endereco: '', cidade: '', observacoes: '', ativo: true };
+const VAZIO = {
+  nome: '',
+  tipo: 'consultorio_odonto' as TipoCliente,
+  documento: '',
+  contato: '',
+  telefone: '',
+  whatsapp: '',
+  email: '',
+  endereco: '',
+  cidade: '',
+  observacoes: '',
+  ativo: true,
+  // Endereço estruturado e dados fiscais (notas fiscais)
+  cep: '',
+  logradouro: '',
+  numero: '',
+  complemento: '',
+  bairro: '',
+  municipio: '',
+  uf: '',
+  codigoMunicipio: '',
+  indicadorIE: '9',
+  inscricaoEstadual: '',
+  emailNota: '',
+};
 
 export function ClienteEditar() {
   const { id } = useParams();
@@ -82,6 +107,8 @@ export function ClienteEditar() {
   const [f, setF] = useState<typeof VAZIO | null>(id ? null : VAZIO);
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [avisoCep, setAvisoCep] = useState('');
 
   if (id && !f && existente.dados) {
     const c = existente.dados;
@@ -90,12 +117,42 @@ export function ClienteEditar() {
   if (!f) return <Carregando />;
   const muda = (k: keyof typeof VAZIO) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
 
+  async function preencherPorCep() {
+    if (!f) return;
+    setAvisoCep('');
+    setBuscandoCep(true);
+    try {
+      const e = await buscarCep(f.cep);
+      if (!e) return setAvisoCep('CEP não encontrado: preencha à mão.');
+      setF({
+        ...f,
+        cep: fmtCep(e.cep),
+        logradouro: e.logradouro || f.logradouro,
+        bairro: e.bairro || f.bairro,
+        municipio: e.municipio,
+        uf: e.uf,
+        codigoMunicipio: e.codigoMunicipio,
+      });
+      setAvisoCep(`${e.municipio} - ${e.uf} · código IBGE ${e.codigoMunicipio}. Confira e informe o número.`);
+    } catch (err) {
+      setAvisoCep(mensagemErro(err));
+    } finally {
+      setBuscandoCep(false);
+    }
+  }
+
   async function salvar(e: FormEvent) {
     e.preventDefault();
     if (!f) return;
     setErro('');
     setSalvando(true);
-    const dados = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]));
+    const dados: Record<string, unknown> = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]));
+    // Endereço de exibição montado a partir do endereço das notas, quando ficou em branco.
+    if (!dados.endereco && f.logradouro.trim()) {
+      dados.endereco = [`${f.logradouro.trim()}${f.numero.trim() ? `, ${f.numero.trim()}` : ''}`, f.complemento.trim(), f.bairro.trim()].filter(Boolean).join(' - ');
+    }
+    if (!dados.cidade && f.municipio.trim()) dados.cidade = [f.municipio.trim(), f.uf.trim().toUpperCase()].filter(Boolean).join(' - ');
+    dados.uf = f.uf.trim().toUpperCase();
     try {
       if (id) {
         await updateDoc(doc(db, 'clientes', id), dados);
@@ -138,6 +195,37 @@ export function ClienteEditar() {
             <span>Cliente ativo</span>
           </label>
         )}
+      </Cartao>
+      <Cartao titulo="Endereço para notas fiscais">
+        <p className="pequeno" style={{ marginTop: 0 }}>
+          Necessário para emitir NFS-e e NF-e pelo app. Digite o CEP e toque em Buscar: rua, bairro, cidade e código IBGE vêm sozinhos.
+        </p>
+        <div className="campo">
+          <span className="campo-rotulo">CEP</span>
+          <div className="editor-linha">
+            <input aria-label="CEP" inputMode="numeric" value={f.cep} onChange={muda('cep')} placeholder="00000-000" />
+            <Botao type="button" variante="secundario" carregando={buscandoCep} onClick={() => void preencherPorCep()}>
+              Buscar
+            </Botao>
+          </div>
+          {avisoCep && <span className="pequeno">{avisoCep}</span>}
+        </div>
+        <div className="grade grade-2">
+          <Campo rotulo="Logradouro" value={f.logradouro} onChange={muda('logradouro')} />
+          <Campo rotulo="Número" value={f.numero} onChange={muda('numero')} />
+          <Campo rotulo="Complemento" value={f.complemento} onChange={muda('complemento')} />
+          <Campo rotulo="Bairro" value={f.bairro} onChange={muda('bairro')} />
+          <Campo rotulo="Município" value={f.municipio} onChange={muda('municipio')} />
+          <Campo rotulo="UF (sigla)" maxLength={2} value={f.uf} onChange={muda('uf')} />
+          <Campo rotulo="Código IBGE do município" inputMode="numeric" value={f.codigoMunicipio} onChange={muda('codigoMunicipio')} />
+          <Campo rotulo="E-mail para receber as notas" type="email" value={f.emailNota} onChange={muda('emailNota')} ajuda="Em branco: usa o e-mail do cadastro." />
+          <Selecao rotulo="Situação no ICMS" value={f.indicadorIE} onChange={muda('indicadorIE')}>
+            <option value="9">Não contribuinte (clínicas e consultórios, em geral)</option>
+            <option value="1">Contribuinte do ICMS</option>
+            <option value="2">Contribuinte isento</option>
+          </Selecao>
+          {f.indicadorIE !== '9' && <Campo rotulo="Inscrição estadual do cliente" value={f.inscricaoEstadual} onChange={muda('inscricaoEstadual')} />}
+        </div>
       </Cartao>
       <Botao type="submit" carregando={salvando} bloco>
         Salvar cliente

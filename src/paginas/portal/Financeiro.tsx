@@ -19,6 +19,7 @@ import { fmtData, fmtDataHora, fmtMoeda } from '../../util/formato';
 import { abrirWhatsApp } from '../../util/whatsapp';
 import { BotaoDocumento } from '../../componentes/BotaoDocumento';
 import { BotaoVisualizar } from '../../componentes/Visualizador';
+import { Icone } from '../../componentes/Icone';
 import { valorMensal } from '../../dados/contratos';
 import { CartaoPix, EditorItens } from '../../componentes/Valores';
 import { AreaTexto, Aviso, Botao, CabecalhoPagina, Carregando, Cartao, Info, LinhaLista, Selo, Vazio } from '../../componentes/ui';
@@ -260,6 +261,7 @@ export function FaturaCliente() {
       <Cartao titulo="Itens">
         <EditorItens itens={f.itens} desconto={f.desconto} somenteLeitura />
       </Cartao>
+      <NotasOficiais f={f} />
       <BotaoVisualizar
         rotulo="Visualizar fatura"
         bloco
@@ -327,5 +329,23 @@ function MeusContratos({ clienteId }: { clienteId: string }) {
         </Cartao>
       ))}
     </>
+  );
+}
+
+/** Notas fiscais autorizadas em produção (as de homologação são testes e não aparecem ao cliente). */
+function NotasOficiais({ f }: { f: Fatura }) {
+  const notas = (['nfse', 'nfe'] as const)
+    .map((tipo) => [tipo, f.emissao?.[tipo]] as const)
+    .filter(([, p]) => p?.status === 'autorizada' && p.ambiente === 'producao' && p.urlPdf);
+  if (!notas.length) return null;
+  return (
+    <div className="acoes-coluna" style={{ marginBottom: 10 }}>
+      {notas.map(([tipo, p]) => (
+        <a key={tipo} className="botao botao-secundario botao-bloco" href={p!.urlPdf!} target="_blank" rel="noreferrer">
+          <Icone nome="pdf" tamanho={20} />
+          <span>{tipo === 'nfse' ? `Nota fiscal de serviço nº ${p!.numero} (PDF)` : `NF-e das peças nº ${p!.numero} (PDF)`}</span>
+        </a>
+      ))}
+    </div>
   );
 }

@@ -6,7 +6,9 @@ import { mensagemErro, useConsulta } from '../../dados/hooks';
 import { avisarNovoChamado, criarAcesso, definirAtivo, reenviarConvite } from '../../dados/operacoes';
 import { prepararLogo } from '../../util/imagem';
 import { soDigitos } from '../../util/formato';
-import type { DocumentoEmpresa, Empresa, Usuario } from '../../tipos';
+import type { AmbienteFiscal, ConfigFiscal, DocumentoEmpresa, Empresa, Usuario } from '../../tipos';
+import { CONFIG_FISCAL_PADRAO, lerExtras, testarPonte } from '../../dados/fiscal';
+import { buscarCep } from '../../util/cep';
 import { deInputData, paraInputData } from '../../util/datas';
 import { Icone } from '../../componentes/Icone';
 import { AreaTexto, Aviso, Botao, CabecalhoPagina, Campo, Carregando, Cartao, Selecao, Selo, useUrlImagem } from '../../componentes/ui';
@@ -40,6 +42,7 @@ export function Configuracoes() {
       <DadosEmpresa empresa={empresa} />
       <PixEOrcamento empresa={empresa} />
       <DocumentosEmpresa empresa={empresa} />
+      <NotasFiscaisConfig empresa={empresa} />
       <AvisoEmail empresa={empresa} />
       <Equipe />
     </>
@@ -415,6 +418,192 @@ function DocumentosEmpresa({ empresa }: { empresa: Empresa }) {
         </Botao>
         <Botao type="button" onClick={() => void salvar()}>
           Salvar documentos
+        </Botao>
+      </div>
+    </Cartao>
+  );
+}
+
+/** Emissão automática de NFS-e e NF-e pela Focus NFe (com a ponte no Google Apps Script). */
+function NotasFiscaisConfig({ empresa }: { empresa: Empresa }) {
+  const [f, setF] = useState<ConfigFiscal>(() => ({
+    ...CONFIG_FISCAL_PADRAO,
+    cnpj: soDigitos(empresa.documento),
+    ...empresa.fiscal,
+    nfse: { ...CONFIG_FISCAL_PADRAO.nfse, ...empresa.fiscal?.nfse },
+    nfe: { ...CONFIG_FISCAL_PADRAO.nfe, ...empresa.fiscal?.nfe },
+  }));
+  const [cep, setCep] = useState('');
+  const [msg, setMsg] = useState<{ tom: 'erro' | 'sucesso' | 'info'; texto: string } | null>(null);
+  const [testando, setTestando] = useState(false);
+  const nfse = (k: keyof ConfigFiscal['nfse'], v: string) => setF({ ...f, nfse: { ...f.nfse, [k]: v } });
+  const nfe = (k: keyof ConfigFiscal['nfe'], v: string) => setF({ ...f, nfe: { ...f.nfe, [k]: v } });
+
+  async function porCep() {
+    try {
+      const e = await buscarCep(cep);
+      if (!e) return setMsg({ tom: 'erro', texto: 'CEP não encontrado.' });
+      setF({ ...f, codigoMunicipio: e.codigoMunicipio, uf: e.uf });
+      setMsg({ tom: 'info', texto: `${e.municipio} - ${e.uf}: código IBGE ${e.codigoMunicipio}.` });
+    } catch (e) {
+      setMsg({ tom: 'erro', texto: mensagemErro(e) });
+    }
+  }
+
+  async function salvar() {
+    setMsg(null);
+    const limpa: ConfigFiscal = {
+      ...f,
+      urlPonte: f.urlPonte.trim(),
+      cnpj: soDigitos(f.cnpj),
+      inscricaoMunicipal: f.inscricaoMunicipal?.trim(),
+      inscricaoEstadual: f.inscricaoEstadual?.trim(),
+      codigoMunicipio: soDigitos(f.codigoMunicipio),
+      uf: f.uf.trim().toUpperCase(),
+    };
+    if (limpa.ativo) {
+      if (limpa.cnpj.length !== 14) return setMsg({ tom: 'erro', texto: 'Informe o CNPJ da empresa (14 dígitos).' });
+      if (limpa.codigoMunicipio.length !== 7) return setMsg({ tom: 'erro', texto: 'Informe o código IBGE do município (7 dígitos): use o CEP.' });
+      if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(limpa.urlPonte)) {
+        return setMsg({ tom: 'erro', texto: 'O endereço da ponte é a URL do app da Web do Apps Script (https://script.google.com/…/exec).' });
+      }
+    }
+    try {
+      lerExtras(limpa.nfse.extras);
+      lerExtras(limpa.nfe.extras);
+    } catch (e) {
+      return setMsg({ tom: 'erro', texto: (e as Error).message });
+    }
+    try {
+      await setDoc(doc(db, 'config', 'empresa'), { fiscal: limpa }, { merge: true });
+      setF(limpa);
+      setMsg({ tom: 'sucesso', texto: limpa.ativo ? 'Notas fiscais salvas. As faturas já mostram os botões de emissão.' : 'Notas fiscais salvas (emissão desligada).' });
+    } catch (e) {
+      setMsg({ tom: 'erro', texto: mensagemErro(e) });
+    }
+  }
+
+  async function testar() {
+    setMsg(null);
+    setTestando(true);
+    try {
+      const r = await testarPonte(f.urlPonte.trim());
+      setMsg({
+        tom: r.ok ? 'sucesso' : 'erro',
+        texto: r.ok
+          ? `A ponte respondeu (versão ${r.versao}, projeto ${r.projeto ?? 'não definido'}). Token de homologação: ${r.homologacao ? 'configurado' : 'FALTA'}. Token de produção: ${
+              r.producao ? 'configurado' : 'ainda não'
+            }.`
+          : 'A ponte respondeu com erro.',
+      });
+    } catch (e) {
+      setMsg({ tom: 'erro', texto: `A ponte não respondeu: ${mensagemErro(e)}. Confira a URL e se a implantação está como "Qualquer pessoa".` });
+    } finally {
+      setTestando(false);
+    }
+  }
+
+  return (
+    <Cartao titulo="Notas fiscais (Focus NFe)">
+      <p className="pequeno" style={{ marginTop: 0 }}>
+        A fatura emite a NFS-e dos serviços e a NF-e das peças com um toque. O token da Focus NFe fica na ponte do Google Apps Script, nunca
+        no app. Passo a passo em <code>apps-script/notas-fiscais/LEIA-ME.md</code>.
+      </p>
+      {msg && <Aviso tom={msg.tom}>{msg.texto}</Aviso>}
+      <label className="marcador">
+        <input type="checkbox" checked={f.ativo} onChange={(e) => setF({ ...f, ativo: e.target.checked })} />
+        <span>Emitir notas pelo app</span>
+      </label>
+      <div className="grade grade-2">
+        <Selecao rotulo="Ambiente" value={f.ambiente} onChange={(e) => setF({ ...f, ambiente: e.target.value as AmbienteFiscal })}>
+          <option value="homologacao">Homologação (testes, sem valor fiscal)</option>
+          <option value="producao">Produção (notas válidas)</option>
+        </Selecao>
+        <Campo rotulo="Endereço da ponte" type="url" value={f.urlPonte} onChange={(e) => setF({ ...f, urlPonte: e.target.value })} placeholder="https://script.google.com/macros/s/…/exec" />
+        <Campo rotulo="CNPJ da empresa" inputMode="numeric" value={f.cnpj} onChange={(e) => setF({ ...f, cnpj: e.target.value })} />
+        <Selecao rotulo="Regime tributário" value={f.opcaoSimples} onChange={(e) => setF({ ...f, opcaoSimples: e.target.value as ConfigFiscal['opcaoSimples'] })}>
+          <option value="3">Simples Nacional (ME/EPP)</option>
+          <option value="2">MEI</option>
+          <option value="1">Não optante pelo Simples</option>
+        </Selecao>
+        <Campo rotulo="Inscrição municipal" value={f.inscricaoMunicipal ?? ''} onChange={(e) => setF({ ...f, inscricaoMunicipal: e.target.value })} />
+        <Campo rotulo="Inscrição estadual" value={f.inscricaoEstadual ?? ''} onChange={(e) => setF({ ...f, inscricaoEstadual: e.target.value })} ajuda="Necessária para a NF-e das peças." />
+        <div className="campo">
+          <span className="campo-rotulo">CEP da empresa (preenche o município)</span>
+          <div className="editor-linha">
+            <input aria-label="CEP da empresa" inputMode="numeric" value={cep} onChange={(e) => setCep(e.target.value)} placeholder="00000-000" />
+            <Botao type="button" variante="secundario" onClick={() => void porCep()}>
+              Buscar
+            </Botao>
+          </div>
+        </div>
+        <div className="grade grade-2" style={{ gap: 10 }}>
+          <Campo rotulo="Código IBGE do município" inputMode="numeric" value={f.codigoMunicipio} onChange={(e) => setF({ ...f, codigoMunicipio: e.target.value })} />
+          <Campo rotulo="UF" maxLength={2} value={f.uf} onChange={(e) => setF({ ...f, uf: e.target.value })} />
+        </div>
+      </div>
+
+      <h3 className="secao-titulo">NFS-e (serviços)</h3>
+      <div className="grade grade-2">
+        <Campo
+          rotulo="Código de tributação nacional"
+          value={f.nfse.codigoTributacaoNacional}
+          onChange={(e) => nfse('codigoTributacaoNacional', e.target.value)}
+          ajuda="6 dígitos, ex.: 140101 (item 14.01 da LC 116). Confirme com o contador."
+        />
+        <Campo
+          rotulo="Código de tributação municipal"
+          value={f.nfse.codigoTributacaoMunicipal ?? ''}
+          onChange={(e) => nfse('codigoTributacaoMunicipal', e.target.value)}
+          ajuda="Só se a prefeitura exigir."
+        />
+        <Selecao rotulo="Tributação do ISS" value={f.nfse.tributacaoIss} onChange={(e) => nfse('tributacaoIss', e.target.value)}>
+          <option value="1">1 · Operação tributável</option>
+          <option value="2">2 · Imunidade</option>
+          <option value="3">3 · Exportação de serviço</option>
+          <option value="4">4 · Não incidência</option>
+        </Selecao>
+        <Selecao rotulo="Retenção do ISS" value={f.nfse.retencaoIss} onChange={(e) => nfse('retencaoIss', e.target.value)}>
+          <option value="1">1 · Não retido</option>
+          <option value="2">2 · Retido pelo tomador</option>
+          <option value="3">3 · Retido pelo intermediário</option>
+        </Selecao>
+      </div>
+      <AreaTexto rotulo="Texto complementar da NFS-e (opcional)" rows={2} value={f.nfse.descricaoComplementar ?? ''} onChange={(e) => nfse('descricaoComplementar', e.target.value)} />
+
+      <h3 className="secao-titulo">NF-e (peças)</h3>
+      <div className="grade grade-3">
+        <Campo rotulo="Natureza da operação" value={f.nfe.naturezaOperacao} onChange={(e) => nfe('naturezaOperacao', e.target.value)} />
+        <Campo rotulo="CFOP dentro do estado" inputMode="numeric" value={f.nfe.cfopInterno} onChange={(e) => nfe('cfopInterno', e.target.value)} />
+        <Campo rotulo="CFOP para outro estado" inputMode="numeric" value={f.nfe.cfopInterestadual} onChange={(e) => nfe('cfopInterestadual', e.target.value)} />
+        <Campo rotulo="CSOSN / CST do ICMS" inputMode="numeric" value={f.nfe.csosn} onChange={(e) => nfe('csosn', e.target.value)} />
+        <Campo rotulo="Origem da mercadoria" inputMode="numeric" value={f.nfe.origem} onChange={(e) => nfe('origem', e.target.value)} ajuda="0 = nacional" />
+        <Campo rotulo="Forma de pagamento" inputMode="numeric" value={f.nfe.formaPagamento} onChange={(e) => nfe('formaPagamento', e.target.value)} ajuda="17 Pix, 15 boleto, 99 outros" />
+        <Campo rotulo="CST do PIS" inputMode="numeric" value={f.nfe.pisCst} onChange={(e) => nfe('pisCst', e.target.value)} />
+        <Campo rotulo="CST da COFINS" inputMode="numeric" value={f.nfe.cofinsCst} onChange={(e) => nfe('cofinsCst', e.target.value)} />
+        <Selecao rotulo="Consumidor final" value={f.nfe.consumidorFinal} onChange={(e) => nfe('consumidorFinal', e.target.value)}>
+          <option value="1">Sim (clínica usa a peça)</option>
+          <option value="0">Não (revenda)</option>
+        </Selecao>
+      </div>
+      <details className="grafico-tabela">
+        <summary>Campos extras (avançado)</summary>
+        <p className="pequeno">
+          Objeto JSON acrescentado ao pedido enviado à Focus NFe, para um campo que o seu município ou o suporte da Focus pedir. Ex.:{' '}
+          <code>{'{"regime_especial_tributacao": "0"}'}</code>
+        </p>
+        <AreaTexto rotulo="Extras da NFS-e" rows={2} value={f.nfse.extras ?? ''} onChange={(e) => nfse('extras', e.target.value)} />
+        <AreaTexto rotulo="Extras da NF-e" rows={2} value={f.nfe.extras ?? ''} onChange={(e) => nfe('extras', e.target.value)} />
+      </details>
+      <p className="pequeno">
+        Estes padrões são um ponto de partida: confira cada código com o contador e faça as primeiras notas em <strong>homologação</strong>.
+      </p>
+      <div className="acoes">
+        <Botao type="button" onClick={() => void salvar()}>
+          Salvar notas fiscais
+        </Botao>
+        <Botao type="button" variante="secundario" carregando={testando} disabled={!f.urlPonte.trim()} onClick={() => void testar()}>
+          Testar ponte
         </Botao>
       </div>
     </Cartao>
