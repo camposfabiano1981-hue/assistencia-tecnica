@@ -174,6 +174,9 @@ export interface DadosFatura {
   desconto: number;
   vencimento: Date;
   observacoes: string;
+  /** Fatura mensal de contrato: marca a competência no contrato na mesma transação. */
+  contratoId?: string | null;
+  competencia?: string | null;
 }
 
 export async function criarFatura(d: DadosFatura): Promise<number> {
@@ -201,8 +204,12 @@ export async function criarFatura(d: DadosFatura): Promise<number> {
       nfse: null,
       nfe: null,
       atualizadaEm: serverTimestamp(),
+      ...(d.contratoId ? { contratoId: d.contratoId, competencia: d.competencia ?? null } : {}),
     });
     if (d.orcamentoId) tx.update(doc(db, 'orcamentos', d.orcamentoId), { faturaId: String(n), atualizadoEm: serverTimestamp() });
+    if (d.contratoId && d.competencia) {
+      tx.update(doc(db, 'contratos', d.contratoId), { ultimaCompetencia: d.competencia, atualizadoEm: serverTimestamp() });
+    }
     return n;
   });
 }

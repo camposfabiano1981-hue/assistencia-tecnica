@@ -43,3 +43,16 @@ export function BotaoVisualizarChamado({ chamado, bloco }: { chamado: Chamado; b
   const { empresa } = useSessao();
   return <BotaoVisualizar rotulo="Visualizar chamado" bloco={bloco} gerar={() => documentoDoChamado(chamado, empresa)} />;
 }
+
+/** Dossiê da Pasta da VISA de um cliente (equipe ou o próprio cliente). */
+export async function documentoDaVisa(clienteId: string, empresa: Empresa | null): Promise<Documento> {
+  const { carregarDadosVisa } = await import('../dados/visa');
+  const dados = await carregarDadosVisa(clienteId);
+  const { gerarDossieVisaPDF } = await import('../util/documentos');
+  return { arquivo: gerarDossieVisaPDF(dados, empresa), texto: `Pasta da Vigilância Sanitária - ${dados.cliente.nome}` };
+}
+
+export function BotaoDossieVisa({ clienteId, rotulo = 'Visualizar dossiê (PDF)', bloco }: { clienteId: string; rotulo?: string; bloco?: boolean }) {
+  const { empresa } = useSessao();
+  return <BotaoVisualizar rotulo={rotulo} bloco={bloco} gerar={() => documentoDaVisa(clienteId, empresa)} />;
+}

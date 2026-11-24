@@ -14,11 +14,12 @@ import {
   tomSituacaoFatura,
   tomStatusOrcamento,
 } from '../../dados/financeiro';
-import type { Fatura, Orcamento } from '../../tipos';
+import type { Contrato, Fatura, Orcamento } from '../../tipos';
 import { fmtData, fmtDataHora, fmtMoeda } from '../../util/formato';
 import { abrirWhatsApp } from '../../util/whatsapp';
 import { BotaoDocumento } from '../../componentes/BotaoDocumento';
 import { BotaoVisualizar } from '../../componentes/Visualizador';
+import { valorMensal } from '../../dados/contratos';
 import { CartaoPix, EditorItens } from '../../componentes/Valores';
 import { AreaTexto, Aviso, Botao, CabecalhoPagina, Carregando, Cartao, Info, LinhaLista, Selo, Vazio } from '../../componentes/ui';
 
@@ -45,7 +46,8 @@ export function FinanceiroCliente() {
 
   return (
     <>
-      <CabecalhoPagina titulo="Financeiro" subtitulo="Orçamentos e faturas" />
+      <CabecalhoPagina titulo="Financeiro" subtitulo="Orçamentos, faturas e contrato" />
+      <MeusContratos clienteId={clienteId} />
       {(orcamentos.erro || faturas.erro) && <Aviso tom="erro">{mensagemErro(orcamentos.erro ?? faturas.erro)}</Aviso>}
 
       <h2 className="secao-titulo">Orçamentos para aprovar ({paraAprovar.length})</h2>
@@ -290,5 +292,40 @@ export function AvisoOrcamentosPendentes() {
       {pendentes.length === 1 ? 'Há 1 orçamento' : `Há ${pendentes.length} orçamentos`} esperando a sua aprovação.{' '}
       <Link to={pendentes.length === 1 ? `/portal/orcamentos/${pendentes[0].id}` : '/portal/financeiro'}>Ver agora</Link>
     </Aviso>
+  );
+}
+
+/** Contrato de manutenção do cliente: cobertura, prazo, valor e o PDF. */
+function MeusContratos({ clienteId }: { clienteId: string }) {
+  const { empresa } = useSessao();
+  const { itens } = useConsulta<Contrato>(
+    () => (clienteId ? query(collection(db, 'contratos'), where('clienteId', '==', clienteId)) : null),
+    [clienteId],
+  );
+  const ativos = itens.filter((c) => c.status === 'ativo');
+  if (!ativos.length) return null;
+  return (
+    <>
+      {ativos.map((c) => (
+        <Cartao key={c.id} titulo={`Contrato de manutenção nº ${c.numero}`}>
+          <dl className="infos">
+            <Info rotulo="Equipamentos cobertos">{String(c.equipamentoIds.length)}</Info>
+            <Info rotulo="Prazo de atendimento">{`até ${c.prazoAtendimentoHoras} horas da abertura do chamado`}</Info>
+            <Info rotulo="Peças">{c.pecasIncluidas ? 'Incluídas' : 'Orçadas à parte, com a sua aprovação'}</Info>
+            <Info rotulo="Valor mensal">{`${fmtMoeda(valorMensal(c))} · vence todo dia ${c.diaVencimento}`}</Info>
+            <Info rotulo="Vigência">{`desde ${fmtData(c.inicio)}${c.fim ? ` até ${fmtData(c.fim)}` : ''}`}</Info>
+          </dl>
+          <div className="acoes">
+            <BotaoVisualizar
+              rotulo="Visualizar contrato"
+              gerar={async () => {
+                const { gerarContratoPDF } = await import('../../util/documentos');
+                return { arquivo: gerarContratoPDF(c, empresa), texto: `Contrato de manutenção nº ${c.numero}` };
+              }}
+            />
+          </div>
+        </Cartao>
+      ))}
+    </>
   );
 }

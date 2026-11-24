@@ -5,10 +5,13 @@ import { Timestamp, collection, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { mensagemErro, useConsulta } from '../../dados/hooks';
 import { menorVencimento } from '../../dados/vencimentos';
-import type { Chamado, Equipamento, Fatura, OrdemServico } from '../../tipos';
+import type { Avaliacao, Chamado, Contrato, Equipamento, Fatura, OrdemServico } from '../../tipos';
+import { contratoDoEquipamento, prazoDoChamado } from '../../dados/contratos';
 import { fmtMoeda } from '../../util/formato';
 import { diasAte } from '../../util/datas';
 import { GraficoColunas, type PontoColuna } from '../../componentes/GraficoColunas';
+import { Estrelas } from '../../componentes/Avaliacao';
+import { mediaNotas } from '../../dados/avaliacoes';
 import { Aviso, CabecalhoPagina, Carregando, Cartao, useOnline } from '../../componentes/ui';
 
 const PERIODOS = [3, 6, 12] as const;
@@ -60,9 +63,11 @@ export function Indicadores() {
   const faturas = useConsulta<Fatura>(() => query(collection(db, 'faturas'), where('emitidaEm', '>=', desde)), [meses]);
   const pagas = useConsulta<Fatura>(() => query(collection(db, 'faturas'), where('status', '==', 'paga')), []);
   const equip = useConsulta<Equipamento>(() => query(collection(db, 'equipamentos'), where('proximoVencimento', '!=', null)), []);
+  const avaliacoes = useConsulta<Avaliacao>(() => query(collection(db, 'avaliacoes'), where('em', '>=', desde)), [meses]);
+  const contratos = useConsulta<Contrato>(() => query(collection(db, 'contratos')), []);
 
   const online = useOnline();
-  const consultas = [chamados, ordens, faturas, pagas, equip];
+  const consultas = [chamados, ordens, faturas, pagas, equip, avaliacoes, contratos];
   const carregando = consultas.some((c) => c.carregando);
   const erro = consultas.find((c) => c.erro)?.erro ?? null;
   // Primeiro chegam os dados guardados no aparelho; os números se completam quando o servidor responde.
@@ -120,6 +125,22 @@ export function Indicadores() {
     return menor ? diasAte(menor.toDate()) >= 0 : true;
   });
 
+  // Contratos: chamados de equipamento coberto em que o atendimento começou dentro do prazo combinado.
+  const deContrato = chamados.itens.flatMap((c) => {
+    const contrato = c.abertoEm ? contratoDoEquipamento(contratos.itens, c.equipamentoId, c.abertoEm.toDate()) : null;
+    const inicio = (c.historico ?? []).filter((h) => h.status === 'em_atendimento').sort((a, b) => a.em.toMillis() - b.em.toMillis())[0];
+    if (!contrato || !inicio) return [];
+    return [inicio.em.toMillis() <= prazoDoChamado(c.abertoEm.toDate(), contrato.prazoAtendimentoHoras).getTime()];
+  });
+  const noPrazo = deContrato.filter(Boolean).length;
+
+  // Satisfação: média das notas e comentários mais recentes.
+  const notaMedia = mediaNotas(avaliacoes.itens.map((a) => a.nota));
+  const comentarios = avaliacoes.itens
+    .filter((a) => a.comentario)
+    .sort((a, b) => (b.em?.toMillis() ?? 0) - (a.em?.toMillis() ?? 0))
+    .slice(0, 5);
+
   // Financeiro
   const faturado = validas.reduce((t, f) => t + f.total, 0);
   const servicos = validas.reduce((t, f) => t + f.totalServicos, 0);
@@ -168,6 +189,16 @@ export function Indicadores() {
               valor={comExigencias.length ? pct(emDia.length / comExigencias.length) : '—'}
               detalhe={`${emDia.length} de ${comExigencias.length} com preventiva/exigências no prazo`}
             />
+            <Kpi
+              rotulo="Contratos: atendimento no prazo"
+              valor={deContrato.length ? pct(noPrazo / deContrato.length) : '—'}
+              detalhe={`${noPrazo} de ${deContrato.length} chamado(s) de equipamento com contrato`}
+            />
+            <Kpi
+              rotulo="Satisfação dos clientes"
+              valor={notaMedia == null ? '—' : `${notaMedia.toLocaleString('pt-BR')} / 5`}
+              detalhe={`${avaliacoes.itens.length} avaliação(ões) no período`}
+            />
           </div>
 
           <GraficoColunas titulo="Chamados por mês" subtitulo={`Últimos ${meses} meses`} unidade="chamados" dados={serieChamados} formatar={(n) => String(Math.round(n))} />
@@ -192,6 +223,19 @@ export function Indicadores() {
             formatar={(n) => fmtMoeda(n)}
             formatarEixo={moedaEixo}
           />
+
+          {!!comentarios.length && (
+            <Cartao titulo="O que os clientes disseram">
+              <div className="lista">
+                {comentarios.map((a) => (
+                  <Link key={a.id} to={`/interno/os/${a.osId}`} className="linha" style={{ display: 'block' }}>
+                    <Estrelas nota={a.nota} /> <span className="pequeno">· {a.clienteNome} · OS {String(a.osNumero).padStart(5, '0')}</span>
+                    <div className="linha-detalhe" style={{ color: 'var(--texto)' }}>“{a.comentario}”</div>
+                  </Link>
+                ))}
+              </div>
+            </Cartao>
+          )}
 
           {!!top.length && (
             <Cartao titulo="Equipamentos com mais chamados">

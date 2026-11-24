@@ -408,3 +408,137 @@ describe('faturas, instrumentos e estoque (Fase 2)', () => {
     await assertSucceeds(deleteDoc(doc(fs('gestor'), 'servicos/s1')));
   });
 });
+
+describe('autenticidade dos laudos (Fase 3)', () => {
+  const CODIGO = 'K7Q2MX9PABCD2345';
+  const registro = (osId = '1') => ({ tipo: 'laudo', osId, osNumero: 1, clienteNome: 'Clínica', tecnicoNome: 'Técnico', liberado: true });
+  const concluir = (db: Firestore, codigo = CODIGO, osId = '1') => {
+    const lote = writeBatch(db);
+    lote.set(doc(db, `verificacoes/${codigo}`), registro(osId));
+    lote.update(doc(db, `os/${osId}`), {
+      codigoVerificacao: codigo,
+      status: 'concluida',
+      liberado: true,
+      assinatura: { nome: 'Dra. Ana', imagem: Bytes.fromUint8Array(new Uint8Array(2000)), em: Timestamp.now() },
+    });
+    return lote.commit();
+  };
+
+  it('nasce junto com a conclusão da OS e qualquer pessoa confere pelo código', async () => {
+    await semear();
+    await criarOS(fs('tec'));
+    await assertFails(concluir(fs('cli1')));
+    await assertSucceeds(concluir(fs('tec')));
+    const anon = env.unauthenticatedContext().firestore() as unknown as Firestore;
+    await assertSucceeds(getDoc(doc(anon, `verificacoes/${CODIGO}`)));
+    await assertSucceeds(getDoc(doc(anon, 'verificacoes/NAOEXISTE2345678')));
+    await assertFails(getDocs(collection(anon, 'verificacoes')));
+    await assertFails(getDocs(collection(fs('tec'), 'verificacoes')));
+    await assertSucceeds(getDocs(collection(fs('gestor'), 'verificacoes')));
+  });
+
+  it('não se forja nem se altera', async () => {
+    await semear();
+    await criarOS(fs('tec'));
+    // Sem a OS com o mesmo código no lote: recusado.
+    await assertFails(setDoc(doc(fs('tec'), `verificacoes/${CODIGO}`), registro()));
+    // Código fora do tamanho: recusado.
+    await assertFails(concluir(fs('tec'), 'CURTO'));
+    await assertSucceeds(concluir(fs('tec')));
+    await assertFails(updateDoc(doc(fs('gestor'), `verificacoes/${CODIGO}`), { liberado: false }));
+    await assertFails(deleteDoc(doc(fs('gestor'), `verificacoes/${CODIGO}`)));
+  });
+});
+
+describe('avaliação do atendimento (Fase 3)', () => {
+  const avaliacao = (extra: Record<string, unknown> = {}) => ({
+    osId: '1',
+    osNumero: 1,
+    chamadoId: null,
+    clienteId: 'c1',
+    clienteNome: 'Clínica',
+    tecnicoId: 'tec',
+    tecnicoNome: 'Técnico',
+    nota: 5,
+    comentario: 'Rápido e caprichoso',
+    por: { uid: 'cli1', nome: 'Dra. Ana' },
+    em: serverTimestamp(),
+    ...extra,
+  });
+  const concluirOS1 = () =>
+    env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'os/1'), { status: 'concluida' });
+    });
+
+  it('o cliente avalia uma vez a própria OS concluída', async () => {
+    await semear();
+    await criarOS(fs('tec'));
+    await assertFails(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao()));
+    await concluirOS1();
+    await assertSucceeds(getDoc(doc(fs('cli1'), 'avaliacoes/1')));
+    await assertFails(setDoc(doc(fs('cli2'), 'avaliacoes/1'), avaliacao({ clienteId: 'c2', por: { uid: 'cli2', nome: 'B' } })));
+    await assertFails(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao({ nota: 6 })));
+    await assertFails(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao({ nota: 4.5 })));
+    await assertFails(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao({ por: { uid: 'outro', nome: 'X' } })));
+    await assertFails(setDoc(doc(fs('tec'), 'avaliacoes/1'), avaliacao()));
+    await assertSucceeds(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao()));
+    await assertFails(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao({ nota: 1 })));
+    await assertFails(updateDoc(doc(fs('cli1'), 'avaliacoes/1'), { nota: 1 }));
+    await assertFails(deleteDoc(doc(fs('gestor'), 'avaliacoes/1')));
+  });
+
+  it('a equipe lê todas; cada cliente só as próprias', async () => {
+    await semear();
+    await criarOS(fs('tec'));
+    await concluirOS1();
+    await assertSucceeds(setDoc(doc(fs('cli1'), 'avaliacoes/1'), avaliacao()));
+    await assertSucceeds(getDocs(collection(fs('tec'), 'avaliacoes')));
+    await assertSucceeds(getDocs(query(collection(fs('cli1'), 'avaliacoes'), where('clienteId', '==', 'c1'))));
+    await assertFails(getDoc(doc(fs('cli2'), 'avaliacoes/1')));
+    await assertFails(getDocs(collection(fs('cli1'), 'avaliacoes')));
+  });
+});
+
+describe('contratos de manutenção (Fase 3)', () => {
+  const contrato = (n: number, extra: Record<string, unknown> = {}) => ({
+    numero: n,
+    clienteId: 'c1',
+    cliente: { nome: 'Clínica A' },
+    equipamentoIds: ['e1'],
+    equipamentos: [{ id: 'e1', descricao: 'Autoclave' }],
+    cobranca: 'mensal',
+    valor: 450,
+    status: 'ativo',
+    ...extra,
+  });
+  const criarContrato = (db: Firestore, extra: Record<string, unknown> = {}) =>
+    runTransaction(db, async (tx) => {
+      const ref = doc(db, 'contadores/contratos');
+      const c = await tx.get(ref);
+      const n = (c.exists() ? (c.data().n as number) : 0) + 1;
+      tx.set(ref, { n });
+      tx.set(doc(db, 'contratos', String(n)), contrato(n, extra));
+      return n;
+    });
+
+  it('só a equipe cria, com numeração sequencial e valor válido', async () => {
+    await semear();
+    await assertFails(criarContrato(fs('cli1')));
+    await assertFails(criarContrato(fs('tec'), { valor: -10 }));
+    await assertFails(criarContrato(fs('tec'), { status: 'encerrado' }));
+    expect(await criarContrato(fs('tec'))).toBe(1);
+    await assertFails(setDoc(doc(fs('tec'), 'contratos/7'), contrato(7)));
+    await assertSucceeds(updateDoc(doc(fs('tec'), 'contratos/1'), { valor: 480, status: 'suspenso' }));
+    await assertFails(updateDoc(doc(fs('tec'), 'contratos/1'), { clienteId: 'c2' }));
+    await assertFails(deleteDoc(doc(fs('gestor'), 'contratos/1')));
+  });
+
+  it('o cliente lê só os próprios contratos e não altera', async () => {
+    await semear();
+    await criarContrato(fs('tec'));
+    await assertSucceeds(getDoc(doc(fs('cli1'), 'contratos/1')));
+    await assertSucceeds(getDocs(query(collection(fs('cli1'), 'contratos'), where('clienteId', '==', 'c1'))));
+    await assertFails(getDoc(doc(fs('cli2'), 'contratos/1')));
+    await assertFails(updateDoc(doc(fs('cli1'), 'contratos/1'), { valor: 1 }));
+  });
+});

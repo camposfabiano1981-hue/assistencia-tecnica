@@ -9,6 +9,7 @@ import { abrirWhatsApp } from '../../util/whatsapp';
 import { GaleriaFotos } from '../../componentes/Fotos';
 import { BotaoLaudo } from '../../componentes/Laudo';
 import { BotaoVisualizarChamado, BotaoVisualizarLaudo } from '../../componentes/Documentos';
+import { AvaliarAtendimento } from '../../componentes/Avaliacao';
 import { Aviso, Botao, CabecalhoPagina, Carregando, Cartao, Info, LinhaLista, LinkBotao, Selo, Vazio } from '../../componentes/ui';
 import { AvisoOrcamentosPendentes } from './Financeiro';
 
@@ -114,6 +115,7 @@ export function ChamadoCliente() {
           <BotaoVisualizarChamado chamado={c} bloco />
         </div>
       </Cartao>
+      {c.status === 'concluido' && c.osId && <AvaliarAtendimento osId={c.osId} destaque={params.get('avaliar') === '1'} />}
       <Cartao titulo="O que foi relatado">
         <p className="relato">{c.relato}</p>
         {c.contato && <p className="pequeno">Contato: {c.contato}</p>}

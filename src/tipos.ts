@@ -41,6 +41,17 @@ export interface Empresa {
   orcGarantia?: string;
   orcCondicoes?: string;
   orcValidadeDias?: number;
+  // Fase 3: documentos da empresa mostrados na Pasta da VISA
+  documentos?: DocumentoEmpresa[];
+}
+
+/** Documento da empresa para a fiscalização (alvará, registro do RT…): o arquivo fica num link (ex.: Google Drive). */
+export interface DocumentoEmpresa {
+  id: string;
+  nome: string;
+  numero?: string;
+  validade?: Timestamp | null;
+  link?: string;
 }
 
 /** config/publico — o mínimo legível sem login (página do QR). */
@@ -280,6 +291,23 @@ export interface OrdemServico {
   estoqueBaixado?: boolean;
   /** Serviços realizados (do catálogo ou avulsos). */
   servicos?: ServicoUsado[];
+  /** Fase 3: código impresso no laudo para conferir a autenticidade em /v/CODIGO. */
+  codigoVerificacao?: string;
+}
+
+/** Registro público de autenticidade de um laudo (verificacoes/{codigo}): só dados não sensíveis. */
+export interface Verificacao {
+  id: string;
+  tipo: 'laudo';
+  osId: string;
+  osNumero: number;
+  tipoOS: string;
+  empresa: { nome: string; documento?: string };
+  clienteNome: string;
+  equipamento: { tipoNome: string; fabricante?: string; modelo?: string; numeroSerie?: string };
+  tecnicoNome: string;
+  concluidaEm: Timestamp;
+  liberado: boolean | null;
 }
 
 /** chamados/{n}/fotos/{id} e os/{n}/fotos/{id} */
@@ -439,4 +467,60 @@ export interface Fatura {
   nfse?: { numero: string; emitidaEm: Timestamp | null; chave?: string } | null;
   nfe?: { numero: string; chave?: string } | null;
   atualizadaEm: Timestamp;
+  /** Fase 3: fatura mensal de contrato (competência AAAA-MM). */
+  contratoId?: string | null;
+  competencia?: string | null;
+}
+
+/** Avaliação do atendimento pelo cliente (avaliacoes/{osId}): uma por OS concluída. */
+export interface Avaliacao {
+  id: string;
+  osId: string;
+  osNumero: number;
+  chamadoId: string | null;
+  clienteId: string;
+  clienteNome: string;
+  tecnicoId: string;
+  tecnicoNome: string;
+  /** 1 a 5 */
+  nota: number;
+  comentario?: string;
+  por: { uid: string; nome: string };
+  em: Timestamp;
+}
+
+// ================= Fase 3: contratos de manutenção =================
+export type CobrancaContrato = 'mensal' | 'por-equipamento';
+export type StatusContrato = 'ativo' | 'suspenso' | 'encerrado';
+
+export interface Contrato {
+  id: string;
+  numero: number;
+  clienteId: string;
+  cliente: SnapshotCliente;
+  /** Equipamentos cobertos (e a descrição de cada um, para o PDF). */
+  equipamentoIds: string[];
+  equipamentos: { id: string; descricao: string }[];
+  objeto: string;
+  /** Valor fixo por mês, ou valor por equipamento por mês. */
+  cobranca: CobrancaContrato;
+  valor: number;
+  pecasIncluidas: boolean;
+  /** 0 = conforme a periodicidade de cada tipo de equipamento. */
+  visitasPreventivasAno: number;
+  /** Prazo para iniciar o atendimento dos chamados, em horas. */
+  prazoAtendimentoHoras: number;
+  inicio: Timestamp;
+  /** null = prazo indeterminado. */
+  fim: Timestamp | null;
+  /** Dia do mês do vencimento da fatura (1 a 28). */
+  diaVencimento: number;
+  reajuste?: string;
+  observacoes?: string;
+  status: StatusContrato;
+  /** Última competência faturada (AAAA-MM). */
+  ultimaCompetencia?: string | null;
+  criadoEm: Timestamp;
+  criadoPor: string;
+  atualizadoEm: Timestamp;
 }

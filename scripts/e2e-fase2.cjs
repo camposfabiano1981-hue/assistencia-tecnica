@@ -486,7 +486,7 @@ const paginas = [];
   const backup = JSON.parse(readFileSync(arquivoBackup, 'utf8'));
   const esperado = {
     usuarios: 2, clientes: 1, tiposEquipamento: 11, equipamentos: 2, chamados: 2, os: 2, orcamentos: 1, faturas: 1,
-    instrumentos: 2, pecas: 1, 'pecas/movimentos': 2, servicos: 10, config: 3, contadores: 4, 'chamados/fotos': 1, 'os/fotos': 1,
+    instrumentos: 2, pecas: 1, 'pecas/movimentos': 2, servicos: 10, verificacoes: 2, config: 3, contadores: 4, 'chamados/fotos': 1, 'os/fotos': 1,
   };
   for (const [grupo, n] of Object.entries(esperado)) confere(backup.totais[grupo] === n, `Backup: ${grupo} = ${backup.totais[grupo]} (esperado ${n})`);
   confere(Object.keys(backup.documentos).length === Object.values(backup.totais).reduce((a, b) => a + b, 0), 'Backup: totais não batem com os documentos');

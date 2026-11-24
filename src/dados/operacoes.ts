@@ -34,7 +34,8 @@ import type {
   TipoOS,
   Usuario,
 } from '../tipos';
-import { descreverEquipamento, numeroOS } from '../util/formato';
+import { descreverEquipamento, numeroOS, rotuloTipoOS } from '../util/formato';
+import { gerarCodigoVerificacao } from '../util/verificacao';
 import { somarMeses } from '../util/datas';
 import { exigenciasDoTipo, menorVencimento } from './vencimentos';
 import { movimentarEstoque } from './estoque';
@@ -299,10 +300,34 @@ export function concluirOS(
   assinatura: { nome: string; documento?: string; png: Uint8Array },
   liberado: boolean,
   por: string,
+  empresa?: { nome?: string; documento?: string } | null,
 ): Promise<void> {
   const lote = writeBatch(db);
   const agora = Timestamp.now();
+  // Autenticidade: código impresso no laudo e registro público só com dados não sensíveis.
+  const codigo = os.codigoVerificacao ?? gerarCodigoVerificacao();
+  lote.set(
+    doc(db, 'verificacoes', codigo),
+    limpo({
+      tipo: 'laudo',
+      osId: os.id,
+      osNumero: os.numero,
+      tipoOS: rotuloTipoOS[os.tipo] ?? os.tipo,
+      empresa: limpo({ nome: empresa?.nome || 'Assistência técnica', documento: empresa?.documento }),
+      clienteNome: os.cliente.nome,
+      equipamento: limpo({
+        tipoNome: os.equipamento.tipoNome,
+        fabricante: os.equipamento.fabricante,
+        modelo: os.equipamento.modelo,
+        numeroSerie: os.equipamento.numeroSerie,
+      }),
+      tecnicoNome: os.tecnicoNome,
+      concluidaEm: agora,
+      liberado,
+    }),
+  );
   lote.update(doc(db, 'os', os.id), {
+    codigoVerificacao: codigo,
     status: 'concluida',
     liberado,
     ...(os.inicioEm ? {} : { inicioEm: agora }),

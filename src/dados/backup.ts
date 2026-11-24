@@ -51,8 +51,12 @@ const AVULSOS = [
   'contadores/os',
   'contadores/orcamentos',
   'contadores/faturas',
+  'contadores/contratos',
 ];
-const COLECOES = ['usuarios', 'clientes', 'tiposEquipamento', 'equipamentos', 'chamados', 'os', 'orcamentos', 'faturas', 'instrumentos', 'pecas', 'servicos'];
+const COLECOES = [
+  'usuarios', 'clientes', 'tiposEquipamento', 'equipamentos', 'chamados', 'os', 'orcamentos', 'faturas', 'instrumentos', 'pecas', 'servicos',
+  'contratos', 'avaliacoes', 'verificacoes',
+];
 const NOMES: Record<string, string> = {
   usuarios: 'equipe e acessos',
   clientes: 'clientes',
@@ -65,6 +69,9 @@ const NOMES: Record<string, string> = {
   instrumentos: 'instrumentos',
   pecas: 'estoque',
   servicos: 'tabela de serviços',
+  contratos: 'contratos',
+  avaliacoes: 'avaliações',
+  verificacoes: 'códigos de autenticidade',
 };
 
 async function emLotes<T>(lista: T[], tamanho: number, fn: (item: T) => Promise<void>) {

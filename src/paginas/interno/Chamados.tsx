@@ -5,7 +5,8 @@ import { db } from '../../firebase';
 import { useSessao } from '../../sessao';
 import { mensagemErro, useConsulta, useDocumento } from '../../dados/hooks';
 import { agendarChamado, criarChamado, criarOS, mudarStatusChamado } from '../../dados/operacoes';
-import type { Chamado, Cliente, Equipamento, Orcamento, StatusChamado, TipoOS, Usuario } from '../../tipos';
+import type { Chamado, Cliente, Contrato, Equipamento, Orcamento, StatusChamado, TipoOS, Usuario } from '../../tipos';
+import { contratoDoEquipamento, prazoDoChamado } from '../../dados/contratos';
 import { rotuloStatusOrcamento, tomStatusOrcamento } from '../../dados/financeiro';
 import { fmtMoeda } from '../../util/formato';
 import {
@@ -185,6 +186,7 @@ export function ChamadoInterno() {
         acoes={<Selo tom={tomStatusChamado[c.status]}>{rotuloStatusChamado[c.status]}</Selo>}
       />
       {c.parado && !encerrado && <Aviso tom="erro">Equipamento PARADO segundo o cliente.</Aviso>}
+      <PrazoDoContrato chamado={c} />
       {msg && <Aviso tom={msg.tom}>{msg.texto}</Aviso>}
 
       <Cartao titulo="Relato">
@@ -421,5 +423,35 @@ function OrcamentosDoChamado({ chamado }: { chamado: Chamado }) {
         </div>
       )}
     </Cartao>
+  );
+}
+
+/** Chamado de equipamento com contrato: mostra o prazo para iniciar o atendimento e se foi cumprido. */
+function PrazoDoContrato({ chamado }: { chamado: Chamado }) {
+  const contratos = useConsulta<Contrato>(
+    () => query(collection(db, 'contratos'), where('clienteId', '==', chamado.clienteId)),
+    [chamado.clienteId],
+  );
+  const contrato = contratoDoEquipamento(contratos.itens, chamado.equipamentoId, chamado.abertoEm?.toDate() ?? new Date());
+  if (!contrato || !chamado.abertoEm) return null;
+  const prazo = prazoDoChamado(chamado.abertoEm.toDate(), contrato.prazoAtendimentoHoras);
+  const inicio = (chamado.historico ?? []).filter((h) => h.status === 'em_atendimento').sort((a, b) => a.em.toMillis() - b.em.toMillis())[0];
+  const fmt = (d: Date) => d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  if (inicio) {
+    const noPrazo = inicio.em.toMillis() <= prazo.getTime();
+    return (
+      <Aviso tom={noPrazo ? 'sucesso' : 'alerta'}>
+        Contrato nº {contrato.numero}: atendimento iniciado em {fmt(inicio.em.toDate())}, {noPrazo ? 'dentro' : 'fora'} do prazo de{' '}
+        {contrato.prazoAtendimentoHoras} h.
+      </Aviso>
+    );
+  }
+  if (chamado.status === 'cancelado' || chamado.status === 'concluido') return null;
+  const atrasado = Date.now() > prazo.getTime();
+  return (
+    <Aviso tom={atrasado ? 'erro' : 'info'}>
+      <strong>Contrato nº {contrato.numero}</strong>: iniciar o atendimento até {fmt(prazo)} ({contrato.prazoAtendimentoHoras} h)
+      {atrasado ? ' — PRAZO VENCIDO.' : '.'} {contrato.pecasIncluidas ? 'Peças incluídas no contrato.' : 'Peças orçadas à parte.'}
+    </Aviso>
   );
 }

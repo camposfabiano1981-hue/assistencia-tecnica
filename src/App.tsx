@@ -4,11 +4,14 @@ import { ExigePapel, Inicio, LayoutInterno, LayoutPortal } from './componentes/L
 import { Login } from './paginas/Login';
 import { Instalar } from './paginas/Instalar';
 import { QrEquipamento } from './paginas/Qr';
+import { Verificar } from './paginas/Verificar';
 import { MeusChamados, ChamadoCliente } from './paginas/portal/Chamados';
 import { NovoChamadoPortal } from './paginas/portal/NovoChamado';
 import { MeusEquipamentos } from './paginas/portal/Equipamentos';
 import { ContaCliente } from './paginas/portal/Conta';
 import { FinanceiroCliente, OrcamentoCliente, FaturaCliente } from './paginas/portal/Financeiro';
+import { AvaliarOS } from './paginas/portal/Avaliar';
+import { PastaVisa } from './paginas/portal/Visa';
 import { Financeiro, OrcamentoEditar, OrcamentoDetalhe, FaturaNova, FaturaDetalhe } from './paginas/interno/Financeiro';
 import { Vencimentos, ListaInstrumentos, InstrumentoEditar, ListaEstoque, PecaDetalhe } from './paginas/interno/Controle';
 import { Painel } from './paginas/interno/Painel';
@@ -24,6 +27,7 @@ import { Mais } from './paginas/interno/Mais';
 import { Indicadores } from './paginas/interno/Indicadores';
 import { Backup } from './paginas/interno/Backup';
 import { ListaServicos, ServicoEditar } from './paginas/interno/Servicos';
+import { ListaContratos, ContratoEditar, ContratoDetalhe } from './paginas/interno/Contratos';
 
 export function App() {
   return (
@@ -33,6 +37,8 @@ export function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/instalar" element={<Instalar />} />
           <Route path="/q/:id" element={<QrEquipamento />} />
+          <Route path="/v" element={<Verificar />} />
+          <Route path="/v/:codigo" element={<Verificar />} />
 
           <Route element={<ExigePapel papeis={['cliente']} />}>
             <Route path="/portal" element={<LayoutPortal />}>
@@ -44,6 +50,8 @@ export function App() {
               <Route path="financeiro" element={<FinanceiroCliente />} />
               <Route path="orcamentos/:id" element={<OrcamentoCliente />} />
               <Route path="faturas/:id" element={<FaturaCliente />} />
+              <Route path="avaliar/:osId" element={<AvaliarOS />} />
+              <Route path="visa" element={<PastaVisa />} />
             </Route>
           </Route>
 
@@ -84,6 +92,10 @@ export function App() {
               <Route path="backup" element={<Backup />} />
               <Route path="servicos" element={<ListaServicos />} />
               <Route path="servicos/:id" element={<ServicoEditar />} />
+              <Route path="contratos" element={<ListaContratos />} />
+              <Route path="contratos/novo" element={<ContratoEditar />} />
+              <Route path="contratos/:id" element={<ContratoDetalhe />} />
+              <Route path="contratos/:id/editar" element={<ContratoEditar />} />
             </Route>
           </Route>
 

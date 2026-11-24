@@ -17,6 +17,7 @@ import {
   tomStatusChamado,
 } from '../../util/formato';
 import { abrirWhatsApp } from '../../util/whatsapp';
+import { BotaoDossieVisa } from '../../componentes/Documentos';
 import {
   AreaTexto,
   Aviso,
@@ -184,6 +185,10 @@ export function ClienteDetalhe() {
           )}
           <LinkBotao para={`/interno/chamados/novo?cliente=${id}`} variante="secundario" icone="chamados">
             Registrar chamado
+          </LinkBotao>
+          <BotaoDossieVisa clienteId={id} rotulo="Pasta da VISA (PDF)" />
+          <LinkBotao para={`/interno/contratos/novo?cliente=${id}`} variante="secundario" icone="lista">
+            Novo contrato
           </LinkBotao>
         </div>
       </Cartao>

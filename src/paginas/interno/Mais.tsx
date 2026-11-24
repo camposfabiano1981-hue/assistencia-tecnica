@@ -9,6 +9,7 @@ export function Mais() {
       <CabecalhoPagina titulo="Mais" subtitulo={`${perfil?.nome} · ${perfil?.papel === 'gestor' ? 'Gestor' : 'Técnico'}`} />
       <div className="lista">
         <LinhaLista para="/interno/financeiro" titulo={<><Icone nome="moeda" tamanho={18} /> Financeiro</>} detalhe="Orçamentos, faturas, Pix e planilha para o contador" />
+        <LinhaLista para="/interno/contratos" titulo={<><Icone nome="lista" tamanho={18} /> Contratos</>} detalhe="Manutenção mensal, faturas do mês e prazo de atendimento" />
         <LinhaLista para="/interno/vencimentos" titulo={<><Icone nome="calendario" tamanho={18} /> Vencimentos</>} detalhe="Preventivas, ensaios e exigências dos próximos 60 dias" />
         <LinhaLista para="/interno/indicadores" titulo={<><Icone nome="grafico" tamanho={18} /> Indicadores</>} detalhe="Atendimentos, tempos e faturamento do período" />
         <LinhaLista para="/interno/equipamentos" titulo={<><Icone nome="caixa" tamanho={18} /> Equipamentos</>} detalhe="Todos os equipamentos atendidos" />

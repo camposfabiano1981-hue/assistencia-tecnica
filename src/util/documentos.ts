@@ -1,7 +1,12 @@
 // PDFs de orçamento e fatura (carregados só quando usados).
 import QRCode from 'qrcode';
-import type { Chamado, Cliente, Empresa, Fatura, Foto, ItemValor, Orcamento } from '../tipos';
-import { fmtData, fmtDataHora, fmtMoeda, fmtTelefone, rotuloOrigem, rotuloStatusChamado } from './formato';
+import type { Chamado, Cliente, Contrato, Empresa, Fatura, Foto, ItemValor, Orcamento } from '../tipos';
+import { valorMensal } from '../dados/contratos';
+import type { DadosVisa } from '../dados/visa';
+import { situacaoDoEquipamento } from '../dados/visa';
+import { rotuloSituacao, situacao } from '../dados/vencimentos';
+import { fmtData, fmtDataHora, fmtMoeda, fmtTelefone, numeroOS, rotuloCriticidade, rotuloOrigem, rotuloStatusChamado, rotuloTipoOS } from './formato';
+import { formatarCodigo } from './verificacao';
 import { COR, Folha, txt } from './pdfBase';
 import { rotuloFormaPagamento } from '../dados/financeiro';
 
@@ -180,4 +185,198 @@ export function gerarChamadoPDF(c: Chamado, empresa: Empresa | null, cliente: Cl
   f.galeria(`Fotos enviadas (${fotos.length})`, fotos);
   f.rodape(undefined, `Chamado nº ${c.numero}`);
   return f.arquivo(`chamado-${c.numero}.pdf`);
+}
+
+/**
+ * Pasta da Vigilância Sanitária: inventário, plano de manutenção (exigências e vencimentos),
+ * histórico de atendimentos com o código de autenticidade de cada laudo e documentos do prestador.
+ */
+export function gerarDossieVisaPDF(d: DadosVisa, empresa: Empresa | null): File {
+  const f = new Folha();
+  const hoje = new Date();
+  f.cabecalho(empresa, ['PASTA DA VIGILÂNCIA SANITÁRIA', 'Registro de manutenção'], hoje.toLocaleDateString('pt-BR'), `${d.equipamentos.length} equipamento(s)`);
+
+  f.secao('Estabelecimento');
+  f.pares([
+    ['Nome', d.cliente.nome],
+    ['CNPJ/CPF', d.cliente.documento],
+    ['Endereço', [d.cliente.endereco, d.cliente.cidade].filter(Boolean).join(' - ')],
+    ['Contato', d.cliente.contato],
+  ]);
+
+  f.secao('Prestador do serviço de manutenção');
+  f.pares([
+    ['Empresa', empresa?.nome],
+    ['CNPJ/CPF', empresa?.documento],
+    ['Responsável técnico', [empresa?.rtNome, empresa?.rtRegistro].filter(Boolean).join(' - ')],
+    ['Contato', [empresa?.whatsapp && fmtTelefone(empresa.whatsapp), empresa?.email].filter(Boolean).join(' · ')],
+  ]);
+  const docs = empresa?.documentos ?? [];
+  if (docs.length) {
+    f.tabela({
+      head: [['Documento do prestador', 'Número', 'Validade', 'Situação']],
+      body: docs.map((x) => [
+        txt(x.nome),
+        txt(x.numero ?? ''),
+        x.validade ? fmtData(x.validade) : '-',
+        x.validade ? rotuloSituacao[situacao(x.validade)] : 'Sem validade',
+      ]),
+      columnStyles: { 1: { cellWidth: 40 }, 2: { cellWidth: 24 }, 3: { cellWidth: 28 } },
+    });
+  }
+
+  f.secao('Inventário de equipamentos');
+  if (!d.equipamentos.length) f.paragrafo('Equipamentos', 'Nenhum equipamento cadastrado.');
+  else
+    f.tabela({
+      head: [['Equipamento', 'Série / patrimônio', 'Setor', 'Criticidade', 'Última manutenção', 'Situação']],
+      body: d.equipamentos.map((e) => [
+        txt([e.tipoNome, e.fabricante, e.modelo].filter(Boolean).join(' ')),
+        txt([e.numeroSerie, e.patrimonio && `pat. ${e.patrimonio}`].filter(Boolean).join(' / ') || '-'),
+        txt(e.setor ?? '-'),
+        txt(rotuloCriticidade[e.criticidade]?.split(' (')[0] ?? '-'),
+        e.ultimaVisitaEm ? `${fmtData(e.ultimaVisitaEm)}${e.ultimaOS ? ` (OS ${numeroOS(e.ultimaOS)})` : ''}` : '-',
+        rotuloSituacao[situacaoDoEquipamento(e)],
+      ]),
+      columnStyles: { 3: { cellWidth: 20 }, 4: { cellWidth: 30 }, 5: { cellWidth: 24 } },
+    });
+
+  const plano = d.equipamentos.flatMap((e) =>
+    Object.values(e.vencimentos ?? {}).map((v) => [
+      txt([e.tipoNome, e.numeroSerie && `(${e.numeroSerie})`].filter(Boolean).join(' ')),
+      txt(v.descricao),
+      v.periodicidadeMeses ? `${v.periodicidadeMeses} meses` : '-',
+      v.ultimo ? fmtData(v.ultimo) : '-',
+      v.proximo ? fmtData(v.proximo) : '-',
+      rotuloSituacao[situacao(v.proximo)],
+    ]),
+  );
+  if (plano.length) {
+    f.secao('Plano de manutenção e exigências periódicas');
+    f.tabela({
+      head: [['Equipamento', 'Exigência', 'Periodicidade', 'Último', 'Próximo', 'Situação']],
+      body: plano,
+      columnStyles: { 2: { cellWidth: 22 }, 3: { cellWidth: 20 }, 4: { cellWidth: 20 }, 5: { cellWidth: 24 } },
+    });
+  }
+
+  const limite = new Date(hoje);
+  limite.setMonth(limite.getMonth() - 24);
+  const historico = d.ordens.filter((o) => (o.fimEm?.toMillis() ?? 0) >= limite.getTime());
+  f.secao('Histórico de atendimentos (últimos 24 meses)');
+  if (!historico.length) f.paragrafo('Atendimentos', 'Nenhum atendimento concluído no período.');
+  else
+    f.tabela({
+      head: [['OS', 'Data', 'Equipamento', 'Tipo', 'Resultado', 'Código do laudo']],
+      body: historico.map((o) => [
+        numeroOS(o.numero),
+        fmtData(o.fimEm),
+        txt([o.equipamento.tipoNome, o.equipamento.numeroSerie && `(${o.equipamento.numeroSerie})`].filter(Boolean).join(' ')),
+        txt(rotuloTipoOS[o.tipo] ?? o.tipo),
+        o.liberado ? 'Liberado' : o.liberado === false ? 'Não liberado' : '-',
+        o.codigoVerificacao ? formatarCodigo(o.codigoVerificacao) : '-',
+      ]),
+      columnStyles: { 0: { cellWidth: 14 }, 1: { cellWidth: 20 }, 4: { cellWidth: 22 }, 5: { cellWidth: 40 } },
+    });
+
+  const instrumentos = new Map<string, string[]>();
+  for (const o of historico)
+    for (const i of o.instrumentosUsados ?? [])
+      instrumentos.set(i.id, [txt(i.descricao), txt(i.numeroSerie ?? '-'), txt(i.certificado ?? '-'), txt(i.laboratorio ?? '-'), i.validade ? fmtData(i.validade) : '-']);
+  if (instrumentos.size) {
+    f.secao('Instrumentos de medição utilizados (rastreabilidade RBC)');
+    f.tabela({ head: [['Instrumento', 'Nº de série', 'Certificado', 'Laboratório', 'Validade']], body: [...instrumentos.values()] });
+  }
+
+  if (historico.some((o) => o.codigoVerificacao)) {
+    f.paragrafo(
+      'Autenticidade',
+      `Cada laudo pode ser conferido em ${typeof location !== 'undefined' ? location.host : ''}/v, informando o código da tabela acima (ou lendo o QR code impresso no laudo).`,
+    );
+  }
+  f.rodape(undefined, `Pasta da VISA - ${d.cliente.nome}`);
+  return f.arquivo(`pasta-visa-${d.cliente.nome.normalize('NFD').replace(/[^\w]+/g, '-').toLowerCase().slice(0, 40)}.pdf`);
+}
+
+/**
+ * Contrato de manutenção (modelo de referência): partes, equipamentos cobertos, condições e assinaturas.
+ * O texto é genérico; a tela recomenda a revisão por advogado antes de assinar.
+ */
+export function gerarContratoPDF(c: Contrato, empresa: Empresa | null): File {
+  const f = new Folha();
+  f.cabecalho(empresa, ['CONTRATO DE PRESTAÇÃO DE', 'SERVIÇOS DE MANUTENÇÃO'], `Nº ${n5(c.numero)}`, `Início em ${fmtData(c.inicio)}`);
+
+  f.secao('Contratante');
+  f.pares([
+    ['Nome', c.cliente.nome],
+    ['CNPJ/CPF', c.cliente.documento],
+    ['Endereço', [c.cliente.endereco, c.cliente.cidade].filter(Boolean).join(' - ')],
+    ['Telefone', fmtTelefone(c.cliente.telefone)],
+  ]);
+  f.secao('Contratada');
+  f.pares([
+    ['Nome', empresa?.nome],
+    ['CNPJ/CPF', empresa?.documento],
+    ['Endereço', [empresa?.endereco, empresa?.cidade].filter(Boolean).join(' - ')],
+    ['Responsável técnico', [empresa?.rtNome, empresa?.rtRegistro].filter(Boolean).join(' - ')],
+  ]);
+
+  f.secao(`Equipamentos cobertos (${c.equipamentos.length})`);
+  f.tabela({ head: [['#', 'Equipamento']], body: c.equipamentos.map((e, i) => [String(i + 1), txt(e.descricao)]), columnStyles: { 0: { cellWidth: 10 } } });
+
+  const total = valorMensal(c);
+  const preco =
+    c.cobranca === 'mensal'
+      ? `${fmtMoeda(total)} por mês`
+      : `${fmtMoeda(c.valor)} por equipamento por mês, totalizando ${fmtMoeda(total)} por mês para ${c.equipamentoIds.length} equipamento(s)`;
+  const clausulas: [string, string][] = [
+    ['1. Objeto', c.objeto],
+    [
+      '2. Atendimento',
+      `Os chamados são abertos pelo portal do cliente, pelo WhatsApp ou por telefone. A CONTRATADA inicia o atendimento em até ${c.prazoAtendimentoHoras} horas da abertura do chamado.` +
+        (c.visitasPreventivasAno > 0
+          ? ` Estão incluídas ${c.visitasPreventivasAno} visita(s) preventiva(s) por ano.`
+          : ' As manutenções preventivas seguem a periodicidade indicada para cada tipo de equipamento.'),
+    ],
+    [
+      '3. Peças',
+      c.pecasIncluidas
+        ? 'As peças de reposição necessárias à manutenção estão incluídas no valor mensal.'
+        : 'As peças de reposição não estão incluídas: são orçadas à parte e só aplicadas após a aprovação do CONTRATANTE.',
+    ],
+    ['4. Preço e pagamento', `${preco}, com vencimento todo dia ${c.diaVencimento}, mediante fatura com Pix.`],
+    ['5. Reajuste', c.reajuste || 'Não previsto.'],
+    [
+      '6. Vigência',
+      `A partir de ${fmtData(c.inicio)}${c.fim ? ` até ${fmtData(c.fim)}` : ', por prazo indeterminado'}. Qualquer das partes pode encerrar o contrato com aviso prévio de 30 dias.`,
+    ],
+    [
+      '7. Registros',
+      'Cada atendimento gera laudo técnico com código de autenticidade. Os laudos, o plano de manutenção e os vencimentos ficam disponíveis ao CONTRATANTE no portal (Pasta da VISA).',
+    ],
+    ['8. Obrigações do contratante', 'Permitir o acesso aos equipamentos, usá-los conforme o manual do fabricante e comunicar defeitos assim que observados.'],
+  ];
+  if (c.observacoes) clausulas.push(['9. Disposições adicionais', c.observacoes]);
+  f.secao('Condições');
+  for (const [rotulo, texto] of clausulas) f.paragrafo(rotulo, texto);
+
+  f.garantir(40);
+  f.secao('Assinaturas');
+  f.pdf.setFontSize(8.6);
+  f.pdf.text('Local e data: ______________________________, ____/____/________', f.M, f.y + 6);
+  f.pdf.setDrawColor(120);
+  f.pdf.setLineWidth(0.3);
+  f.pdf.line(f.M, f.y + 24, f.M + f.L / 2 - 4, f.y + 24);
+  f.pdf.line(f.M + f.L / 2 + 4, f.y + 24, 210 - f.M, f.y + 24);
+  f.pdf.setFont('helvetica', 'bold');
+  f.pdf.text(txt(c.cliente.nome), f.M, f.y + 28, { maxWidth: f.L / 2 - 4 });
+  f.pdf.text(txt(empresa?.nome || 'Contratada'), f.M + f.L / 2 + 4, f.y + 28, { maxWidth: f.L / 2 - 4 });
+  f.pdf.setFont('helvetica', 'normal');
+  f.pdf.setTextColor(...COR.suave);
+  f.pdf.text('CONTRATANTE', f.M, f.y + 32);
+  f.pdf.text('CONTRATADA', f.M + f.L / 2 + 4, f.y + 32);
+  f.pdf.setTextColor(0);
+  f.y += 36;
+  f.rodape(undefined, `Contrato nº ${n5(c.numero)}`);
+  return f.arquivo(`contrato-${n5(c.numero)}.pdf`);
 }
